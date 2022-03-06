@@ -1,0 +1,12 @@
+# Local package
+-e .
+
+# External requirements
+pytest
+flake8
+numpy
+typing
+scipy
+matplotlib
+seaborn >= 0.11.1
+
