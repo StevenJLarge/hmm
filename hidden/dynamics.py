@@ -27,7 +27,6 @@ class HMM:
         self.A = np.zeros((self.n_sys, self.n_sys))
         self.B = np.zeros((self.n_obs, self.n_obs))
 
-        # NOTE there must be a better way of doing this...
         # NOTE that this now assumes a symmetric cycle (fwd rate = back-rate)
         for i in range(self.n_sys):
             for j in range(i + 1, self.n_sys):
@@ -97,6 +96,8 @@ def plot_traj(state: Iterable, observation: Iterable):
     ax.plot(observation, 'o', markersize=4, color=Pal[1], label='Observation')
     ax.set_xlabel(r"Time", fontsize=15)
     ax.set_ylabel(r"State", fontsize=15)
+    ax.legend(fontsize=12)
+
     plt.tight_layout()
     plt.show()
     plt.close()
@@ -105,7 +106,7 @@ def plot_traj(state: Iterable, observation: Iterable):
 if __name__ == "__main__":
 
     # Setup
-    obj = HMM(2, 2)
+    obj = HMM(3, 3)
     obj.init_uniform_cycle(0.1)
 
     # Generate synthetic dynamics:
@@ -114,15 +115,4 @@ if __name__ == "__main__":
     obs = obj.get_obs_ts()
 
     plot_traj(state, obs)
-
-    # Perform EM algo to infer system parameters
-    # Instantiate differeny object to infer state
-    # obj.baum_welch()
-
-    # TESTING PHASE
-    # generate dynamics
-    # obj.run_dynamics(n_steps=50)
-    # Run forward algorithm for determining hidden state
-    # obj.forward_algo() 
-
 
