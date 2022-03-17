@@ -1,0 +1,10 @@
+LICENSE.txt
+README.md
+setup.py
+hidden/__init__.py
+hidden/dynamics.py
+hidden/infer.py
+hidden.egg-info/PKG-INFO
+hidden.egg-info/SOURCES.txt
+hidden.egg-info/dependency_links.txt
+hidden.egg-info/top_level.txt
