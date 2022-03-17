@@ -51,5 +51,11 @@ class MarkovInfer:
         pass
 
     # Inferrence routines
+    def expectation(self):
+        pass
+
+    def maximization(self):
+        pass
+
     def baum_welch(self):
         pass
