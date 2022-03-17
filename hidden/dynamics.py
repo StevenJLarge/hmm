@@ -28,15 +28,17 @@ class HMM:
         self.B = np.zeros((self.n_obs, self.n_obs))
 
         # NOTE there must be a better way of doing this...
+        # NOTE that this now assumes a symmetric cycle (fwd rate = back-rate)
         for i in range(self.n_sys):
-            for j in range(self.n_sys):
-                self.A[i, j] = (lambda x: trans_rate * self.n_sys if x == 1 else 0)(np.abs(i - j))
+            for j in range(i + 1, self.n_sys):
+                self.A[i, j] = (lambda x: trans_rate if x == 1 else 0)(np.abs(i - j))
+                self.A[j, i] = self.A[i, j]
+            self.A[i, i] = 1 - np.sum(self.A[:, i])
 
         for i in range(self.n_obs):
-            for j in range(self.n_obs):
-                self.B[i, j] = (lambda x: error_rate * self.n_obs if x == 1 else 0)(np.abs(i - j))
-
-            self.A[i, i] = 1 - np.sum(self.A[:, i])
+            for j in range(i + 1, self.n_obs):
+                self.B[i, j] = (lambda x: error_rate if x == 1 else 0)(np.abs(i - j))
+                self.B[j, i] = self.B[i, j]
             self.B[i, i] = 1 - np.sum(self.B[:, i])
 
     # Dynamics routines
@@ -56,18 +58,17 @@ class HMM:
             self.step_dynamics()
 
     def step_dynamics(self):
-        trans_prob = self.A[:, np.argmax(self.state)]
-        obs_prob = self.B[:, np.argmax(self.state)]
-
         # Kinetic monte-carlo dynamics
-        w1 = np.random.uniform()
-        w2 = np.random.uniform()
+        w_sys = np.random.uniform()
+        w_obs = np.random.uniform()
 
-        csum_sys = np.cumsum(trans_prob)
-        self.state = self._set_state(w1 < csum_sys)
+        trans_prob = self.A[:, np.argmax(self.state)]
+        new_sys = np.argmax(w_sys < np.cumsum(trans_prob))
+        self._set_state(new_sys)
 
-        csum_obs = np.cumsum(obs_prob)
-        self.obs = self._set_obs(w2 < csum_obs)
+        obs_prob = self.B[:, np.argmax(self.state)]
+        new_obs = np.argmax(w_obs < np.cumsum(obs_prob))
+        self._set_obs(new_obs)
 
     def _set_state(self, new_state):
         self.state = np.zeros(self.n_sys)
