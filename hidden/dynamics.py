@@ -20,6 +20,10 @@ class HMM:
         self.state_tracker = []
         self.obs_tracker = []
 
+    def initialize_dynamics(self, A: np.ndarray, B: np.ndarray):
+        self.A = A
+        self.B = B
+
     def init_uniform_cycle(
         self, trans_rate: Optional[int] = 0.3,
         error_rate: Optional[int] = 0.2
