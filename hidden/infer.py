@@ -22,18 +22,18 @@ class MarkovInfer:
         self.forward_tracker = [self.bayes_filter]
 
     def _initialize_back_tracker(self):
-        self.back_filter = self.bayes_filter[-1]
-        self.back_tracker = [self.back_filter]
+        self.back_filter = self.forward_tracker[-1]
+        self.backward_tracker = [self.back_filter]
 
     # Filtering and processing routines
     def bayesian_filter(self, obs: int, A: np.ndarray, B: np.ndarray):
-        self.bayes_prob = np.matmul(A, self.bayes_prob)
-        self.bayes_filter = B[:, obs] * self.bayes_prob
+        self.bayes_filter = np.matmul(A, self.bayes_filter)
+        self.bayes_filter = B[:, obs] * self.bayes_filter
         self.bayes_filter /= np.sum(self.bayes_filter)
 
     def bayesian_back(self, obs: int, A: np.ndarray, B: np.ndarray):
-        self.back_prob = np.matmul(A.T, self.back_prob)
-        self.back_filter = B[obs, :] * self.back_prob
+        self.back_filter = np.matmul(A, self.back_filter)
+        self.back_filter = B[:, obs] * self.back_filter
         self.back_filter /= np.sum(self.back_filter)
 
     def forward_algo(
@@ -46,7 +46,7 @@ class MarkovInfer:
 
         for obs in observations:
             self.bayesian_filter(obs, trans_matrix, obs_matrix)
-            self.bayes_tracker.append(self.bayes_filter)
+            self.forward_tracker.append(self.bayes_filter)
 
     def backward_algo(
         self,
@@ -56,9 +56,11 @@ class MarkovInfer:
     ):
         self._initialize_back_tracker()
 
-        for obs in enumerate(np.flip(observations)):
-            self.backward_filter(obs, trans_matrix, obs_matrix)
-            self.back_tracker.append(self.back_filter)
+        for obs in np.flip(observations):
+            self.bayesian_back(obs, trans_matrix, obs_matrix)
+            self.backward_tracker.append(self.back_filter)
+
+        self.backward_tracker = np.flip(self.backward_tracker)
 
     def bayesian_smooth(self, A: np.ndarray):
         self.bayes_smoother = [[]] * len(self.forward_tracker)
@@ -90,3 +92,20 @@ class MarkovInfer:
 
     def baum_welch(self):
         pass
+
+
+if __name__ == "__main__":
+    from hidden import dynamics
+    hmm = dynamics.HMM(2, 2)
+    hmm.init_uniform_cycle()
+    hmm.run_dynamics(100)
+
+    state_ts = hmm.get_state_ts()
+    obs_ts = hmm.get_obs_ts()
+
+    BayesInfer = MarkovInfer(2, 2)
+
+    BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
+    BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
+    BayesInfer.bayesian_smooth(hmm.A)
+

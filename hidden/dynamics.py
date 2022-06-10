@@ -25,8 +25,8 @@ class HMM:
         self.B = B
 
     def init_uniform_cycle(
-        self, trans_rate: Optional[int] = 0.3,
-        error_rate: Optional[int] = 0.2
+        self, trans_rate: Optional[int] = 0.1,
+        error_rate: Optional[int] = 0.3
     ):
         self.A = np.zeros((self.n_sys, self.n_sys))
         self.B = np.zeros((self.n_obs, self.n_obs))
