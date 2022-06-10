@@ -67,7 +67,8 @@ class MarkovInfer:
         self.bayes_smoother[-1] = np.array(self.forward_tracker[-1])
 
         for i in range(len(self.forward_tracker) - 1):
-            prediction = np.matmul(A, self.forward_tracker[-(i + 2)])
+            # NOTE I think there is a transpose on the A term here
+            prediction = np.matmul(A.T, self.forward_tracker[-(i + 2)])
             summand = [np.sum(self.bayes_smoother[-(i+1)] * A[:, j] / prediction) for j in range(A.shape[1])]
             self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
 
