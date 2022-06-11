@@ -2,7 +2,7 @@
 # properties of the HMM
 
 import numpy as np
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Tuple
 
 
 class MarkovInfer:
@@ -67,7 +67,7 @@ class MarkovInfer:
         self.bayes_smoother[-1] = np.array(self.forward_tracker[-1])
 
         for i in range(len(self.forward_tracker) - 1):
-            # NOTE I think there is a transpose on the A term here
+            # NOTE I think there is a transpose on the A term here?
             prediction = np.matmul(A.T, self.forward_tracker[-(i + 2)])
             summand = [np.sum(self.bayes_smoother[-(i+1)] * A[:, j] / prediction) for j in range(A.shape[1])]
             self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
@@ -83,6 +83,61 @@ class MarkovInfer:
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
         return np.sum([pred_ts == state_ts])/len(state_ts)
+
+    # Likelihood calculation (Brute)
+    # TODO fill in these routines
+    def calc_likelihood(self, B: np.ndarray, obs_ts: Iterable[int]) -> float:
+        likelihood = 0
+        for bayes, obs in zip(self.forward_tracker[1:], obs_ts):
+            inner = bayes @ B[:, obs]
+            likelihood -= np.log(inner)
+        return likelihood
+
+    def _extract_hmm_parameters(
+        theta: np.ndarray, symmetric: Optional[bool] = False
+    ) -> Tuple:
+        if not symmetric:
+            if len(theta) != 4:
+                raise ValueError(
+                    "Need to provide len=4 parameter vector when not symmetric"
+                )
+            A = np.zeros((len(theta), len(theta)))
+            B = np.zeros((len(theta), len(theta)))
+            A[0, 0], A[1, 1] = 1 - theta[0], 1 - theta[1]
+            A[0, 1], A[1, 0] = theta[0], theta[1]
+
+            B[0, 0], B[1, 1] = 1 - theta[2], 1 - theta[3]
+            B[0, 1], B[1, 0] = theta[2], theta[3]
+
+            return A, B
+
+        A = theta[0] * np.ones((2, 2))
+        B = theta[1] * np.ones((2, 2))
+
+        A[0, 0], A[1, 1] = 1 - theta[0], 1 - theta[0]
+        B[0, 0], B[1, 1] = 1 - theta[1], 1 - theta[1]
+
+        return A, B
+
+    def _likelihood_deriv(
+        self,
+        curr_theta: np.ndarray,
+        obs_ts: np.ndarray,
+        delta: Optional[float] = 0.01
+    ) -> np.ndarray:
+        pass
+
+    def grad_descent(
+        self,
+        init_theta: np.ndarray,
+        learning_rate: Optional[float] = 0.0002,
+        max_iter: Optional[int] = 1000,
+        tolerance: Optional[float] = 1e-8
+    ):
+        pass
+
+    def _calc_likelihood_gradient(self):
+        pass
 
     # Inferrence routines
     def expectation(self):
