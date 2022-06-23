@@ -31,7 +31,7 @@ class HMM:
         self.A = np.zeros((self.n_sys, self.n_sys))
         self.B = np.zeros((self.n_obs, self.n_obs))
 
-        # NOTE that this now assumes a symmetric cycle (fwd rate = back-rate)
+        # NOTE that this assumes a symmetric cycle (fwd rate = back-rate)
         for i in range(self.n_sys):
             for j in range(i + 1, self.n_sys):
                 self.A[i, j] = (lambda x: trans_rate if x == 1 else 0)(np.abs(i - j))
@@ -50,6 +50,7 @@ class HMM:
     ):
         if init_state is None:
             self._set_state(np.random.randint(0, self.n_sys))
+        # Assume initial obervation is accurate
         self._set_obs(np.argmax(self.state))
 
         if self.state_tracker is None or self.obs_tracker is None:
@@ -79,7 +80,10 @@ class HMM:
 
     def _set_obs(self, new_obs):
         self.obs = np.zeros(self.n_obs)
-        self.obs[new_obs] = 1
+        cumul_trans = np.cumsum(self.B[:, new_obs])
+        rand = np.random.uniform(0, cumul_trans[-1])
+        init_obs = np.argmax(rand < cumul_trans)
+        self.obs[init_obs] = 1
 
     def get_state_ts(self):
         return [np.argmax(s) for s in self.state_tracker]
