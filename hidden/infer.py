@@ -20,6 +20,7 @@ class MarkovInfer:
         # Tracker lists for forward and backward estimates
         self.forward_tracker = []
         self.backward_tracker = []
+        self.predictions = []
 
         # Dimension of tareg systema nd observation vector
         self.n_sys = dim_sys
@@ -37,17 +38,23 @@ class MarkovInfer:
         self.bayes_filter = np.ones(self.n_sys) / self.n_sys
         self.forward_tracker = []
 
+    def _initialize_pred_tracker(self):
+        self.predictions = []
+
     def _initialize_back_tracker(self):
         # 'initial' value for the back-filter is the final value in the forward
         # filter
         self.back_filter = self.forward_tracker[-1]
         self.backward_tracker = [self.back_filter]
 
-    def bayesian_filter(self, obs: int, A: np.ndarray, B: np.ndarray):
-        # Two-step bayesian filter equaations, updates the current bayes_filter
-        # TODO Implement this as a two-call process, as we now want to track the
-        # predictions individually for total-likelihood optimization
+    def bayesian_filter(
+        self, obs: int, A: np.ndarray, B: np.ndarray,
+        prediction_tracker: bool
+    ):
+        # Two-step bayesian filter equations, updates the current bayes_filter
         self.bayes_filter = np.matmul(A, self.bayes_filter)
+        if prediction_tracker:
+            self.predictions.append(self.bayes_filter)
         self.bayes_filter = B[:, obs] * self.bayes_filter
         self.bayes_filter /= np.sum(self.bayes_filter)
 
@@ -61,25 +68,18 @@ class MarkovInfer:
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray
+        obs_matrix: np.ndarray,
+        prediction_tracker: Optional[bool] = False
     ):
         # Runs the fwd algo over an entire sequence
         self._initialize_bayes_tracker()
 
-        for obs in observations:
-            self.bayesian_filter(obs, trans_matrix, obs_matrix)
-            self.forward_tracker.append(self.bayes_filter)
+        if prediction_tracker:
+            self._initialize_pred_tracker()
 
-    def prediction_algo(
-        self,
-        observations: Iterable[int],
-        trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray
-    ):
-        # TODO 
-        # Algorithm to track only the predictions of the Bayesian update (not
-        # the full filter results) for total likelihood calculations
-        pass
+        for obs in observations:
+            self.bayesian_filter(obs, trans_matrix, obs_matrix, prediction_tracker)
+            self.forward_tracker.append(self.bayes_filter)
 
     def backward_algo(
         self,

@@ -1,1 +1,2 @@
-hidden/__pycache__/*
+hidden/__pycache__/**
+**pyc
