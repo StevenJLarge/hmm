@@ -2,6 +2,8 @@
 # properties of the HMM
 
 import numpy as np
+import scipy.optimize as so
+from scipy.optimize import OptimizeResult
 from typing import Iterable, Optional, Tuple
 
 
@@ -122,10 +124,10 @@ class MarkovInfer:
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
         return np.sum([pred_ts == state_ts])/len(state_ts)
 
-    # Likelihood calculation (Brute)
+    # Total Likelihood calculation (Brute)
     def calc_likelihood(self, B: np.ndarray, obs_ts: Iterable[int]) -> float:
         likelihood = 0
-        for bayes, obs in zip(self.forward_tracker[1:], obs_ts):
+        for bayes, obs in zip(self.predictions, obs_ts):
             inner = bayes @ B[:, obs]
             likelihood -= np.log(inner)
         return likelihood
@@ -161,39 +163,39 @@ class MarkovInfer:
 
         return A, B
 
-    def _likelihood_deriv(
-        self,
-        curr_theta: np.ndarray,
-        obs_ts: np.ndarray,
-        delta: Optional[float] = 0.01
-    ) -> np.ndarray:
+    # Likelihood optimizers:
+    def maximize_likleihood(
+        self, obs_ts: Iterable, method: Optional[str] = "local"
+    ) -> OptimizeResult:
+        # NOTE Should I pass in optimization parameters for each submethod?
+
+        if method == 'baum-welch':
+            raise NotImplementedError(
+                '`baum-welch` algorithm not currently implemented'
+            )
+        if method == 'local':
+            return self._optimize_likelihood_local(obs_ts)
+        if method == 'global':
+            return self._optimize_likelihood_global(obs_ts)
+
+        raise ValueError(
+            f"Method {method} is invalid, must be `local` or `global`..."
+        )
+
+    def _calc_likeihood_optimizer(self):
+        # TODO write in the optimizer-version version of the total likelihood
         pass
 
-    def grad_descent(
-        self,
-        obs_ts: np.ndarray,
-        init_theta: np.ndarray,
-        learning_rate: Optional[float] = 0.0002,
-        delta: Optional[float] = 0.01,
-        max_iter: Optional[int] = 1000,
-        tolerance: Optional[float] = 1e-8
-    ):
-        grad = np.zeros_like(curr_theta)
+    def _optimize_likelihood_local(
+        self, obs_ts: Iterable, method: Optional[str]="SLSQP", **kwargs
+    ) -> OptimizeResult:
+        # Local optimization of likelihood using local methds
+        pass
 
-        for i in range(len(curr_theta)):
-            plus_theta = np.copy(curr_theta)
-            minus_theta = np.copy(curr_theta)
-
-            plus_theta[i] += delta
-            minus_theta[i] -= delta
-
-            A_plus, B_plus = self._extract_hmm_parameters(plus_theta)
-            A_minus, B_minus = self._extract_hmm_parameters(minus_theta)
-
-            self.forward_algo(obs_ts,)
-
-
-    def _calc_likelihood_gradient(self):
+    def _optimize_likelihood_global(
+        self, obs_ts: Iterable, **kwargs
+    ) -> OptimizeResult:
+        # Global optimization of likelihood using SHGO algorithm
         pass
 
     # Inferrence routines
