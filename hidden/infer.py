@@ -4,8 +4,25 @@
 import numpy as np
 import scipy.optimize as so
 from scipy.optimize import OptimizeResult
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, Optional, Tuple, Dict
 
+
+class LikelihoodOptResult:
+    result: np.ndarray
+    type: str
+    success: bool
+    likelihood: float
+    metadata: Dict
+
+    def __init__(self, res: OptimizeResult, method_type: str, **kwargs):
+        self.result = res.x
+        self.type = method_type
+        self.success = res.sucess
+        self.likelihood = res.fun
+        self.metadata = {"message": res.message}
+
+        for key, val in kwargs.items():
+            self.metadata[key] = val
 
 class MarkovInfer:
     #Type hints for instance variables
@@ -182,21 +199,61 @@ class MarkovInfer:
             f"Method {method} is invalid, must be `local` or `global`..."
         )
 
-    def _calc_likeihood_optimizer(self):
-        # TODO write in the optimizer-version version of the total likelihood
-        pass
+    def _calc_likeihood_optimizer(
+        self, param_arr: Iterable, obs_ts: Iterable
+    ) -> float:
+        # NOTE Currently this only works for a 2D HMM
+        A, B = self._extract_hmm_parameters(param_arr)
+        self.forward_algo(obs_ts, A, B, prediction_tracker=True)
+        
+        likelihood = 0
+        for bayes, obs, in zip(self.predictions, obs_ts):
+            inner = bayes @ B[:, obs]
+            likelihood -= np.log(inner)
+        return likelihood
+
+    def _build_optimization_bounds(
+        self, param_init: Iterable,
+        lower_lim: Optional[float] = 0, upper_lim: Optional[float] = 1
+    ) -> Iterable:
+        return [lower_lim, upper_lim] * len(param_init)
 
     def _optimize_likelihood_local(
-        self, obs_ts: Iterable, method: Optional[str]="SLSQP", **kwargs
+        self, obs_ts: Iterable, param_init: Iterable,
+        method: Optional[str]="SLSQP"
     ) -> OptimizeResult:
         # Local optimization of likelihood using local methds
-        pass
+        bnds = self._build_optimization_bounds(param_init)
+        res = so.minimize(
+            self._calc_likeihood_optimizer,
+            param_init,
+            args=(obs_ts, self),
+            method=method,
+            bounds=bnds,
+        )
+
+        return LikelihoodOptResult(res, 'local', method=method)
 
     def _optimize_likelihood_global(
-        self, obs_ts: Iterable, **kwargs
+        self, obs_ts: Iterable, param_init: Iterable,
+        sampling_method: Optional[str] = 'sobol'
     ) -> OptimizeResult:
         # Global optimization of likelihood using SHGO algorithm
-        pass
+        if sampling_method not in ['sobol', 'simplical', 'halton']:
+            raise ValueError(
+                "`sampling_method` must be one of `sobol`, `simplical`, or "
+                "`halton`"
+            )
+
+        bnds = self._build_optimization_bounds(param_init)
+        res = so.shgo(
+            self._calc_likelihood_optimizer,
+            bounds=bnds,
+            args=(obs_ts, self),
+            sampling_method=sampling_method
+        )
+
+        return LikelihoodOptResult(res, 'global', sampling_method=sampling_method)
 
     # Inferrence routines
     def expectation(self):
@@ -207,6 +264,14 @@ class MarkovInfer:
 
     def baum_welch(self):
         pass
+
+
+# ANCHOR Potentially move this logic to a separate `optimize` module
+# Optimizers
+def local_likelihood_optimizer(
+    est: MarkovInfer, obs_ts: Iterable, method: Optional[str] = "SLSQP"
+):
+    res = so.minimize()
 
 
 if __name__ == "__main__":
