@@ -17,7 +17,7 @@ class LikelihoodOptResult:
     def __init__(self, res: OptimizeResult, method_type: str, **kwargs):
         self.result = res.x
         self.type = method_type
-        self.success = res.sucess
+        self.success = res.success
         self.likelihood = res.fun
         self.metadata = {"message": res.message}
 
@@ -205,12 +205,23 @@ class MarkovInfer:
         # NOTE Currently this only works for a 2D HMM
         A, B = self._extract_hmm_parameters(param_arr)
         self.forward_algo(obs_ts, A, B, prediction_tracker=True)
-        
+
         likelihood = 0
         for bayes, obs, in zip(self.predictions, obs_ts):
             inner = bayes @ B[:, obs]
             likelihood -= np.log(inner)
         return likelihood
+
+    def _calc_likelihood_baum_welch(
+        self, param_arr: Iterable, obs_ts: Iterable, state_ts: Iterable
+    ) -> float:
+        # Calculate likelihood assuming full knowledge of hidden state sequenmce
+        _, B = self.extract_hmm_parameters(param_arr)
+        likelihood = 0
+        for state, obs in zip(state_ts, obs_ts):
+            inner = state @ B[:, obs]
+            likelihood -= np.log(inner)
+        return likelihood 
 
     def _build_optimization_bounds(
         self, param_init: Iterable,
@@ -222,7 +233,7 @@ class MarkovInfer:
         self, obs_ts: Iterable, param_init: Iterable,
         method: Optional[str]="SLSQP"
     ) -> OptimizeResult:
-        # Local optimization of likelihood using local methds
+        # Local optimization of likelihood using local methods
         bnds = self._build_optimization_bounds(param_init)
         res = so.minimize(
             self._calc_likeihood_optimizer,
@@ -256,13 +267,25 @@ class MarkovInfer:
         return LikelihoodOptResult(res, 'global', sampling_method=sampling_method)
 
     # Inferrence routines
-    def expectation(self):
+    def expectation(
+        self, obs_ts: Iterable, A_est: np.ndarray, B_est: np.ndarray
+    ) -> Iterable:
+        # NOTE Swap this out for the bayes_smoother
+        self.forward_algo(obs_ts, A_est, B_est)
+        pred_states = []
+        for est in self.forward_tracker:
+            state = np.array([0, 0])
+            state[np.argmax(est)] = 1
+            pred_states.append(state)
+        return pred_states
+
+    def maximization(self, obs_ts, pred_ts, A_est, B_est):
+        # Package the variables and pass them into optimizer using
+        # _calc_likelihood_baum_welch
         pass
 
-    def maximization(self):
-        pass
-
-    def baum_welch(self):
+    def baum_welch(self, maxiter: Optional[int]=100, tolerance: Optional[float]=1e-8):
+        # Iterate through steps of self.expectation, self.maximization
         pass
 
 

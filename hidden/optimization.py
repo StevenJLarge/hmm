@@ -41,9 +41,9 @@ def calc_likelihood_optimizer(
     predictions = _forward_algo(obs_ts, A, B)
 
     likelihood = 0
-    for bayes, obs in zip(predictions, obs_ts):
+    for i, obs in enumerate(obs_ts):
         # NOTE Error in shape mismatches here
-        inner = bayes @ B[:, obs]
+        inner = predictions[:, i].reshape(1, 2) @ B[:, obs]
         likelihood -= np.log(inner)
     return likelihood
 
