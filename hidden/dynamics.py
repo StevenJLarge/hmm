@@ -74,10 +74,20 @@ class HMM:
         self._set_obs(new_obs)
 
     def _set_state(self, new_state):
+        if new_state < 0 or new_state > self.n_sys:
+            raise IndexError(
+                f"New state `{new_state}` out of bounds for system of "
+                f"dimension `{self.n_sys}`"
+            )
         self.state = np.zeros(self.n_sys)
         self.state[new_state] = 1
 
     def _set_obs(self, new_obs):
+        if new_obs < 0 or new_obs > self.n_obs:
+            raise IndexError(
+                f"New observation `{new_obs}` out of bounds for system with "
+                f"dimension `{self.n_obs}`"
+            )
         self.obs = np.zeros(self.n_obs)
         self.obs[new_obs] = 1
 
@@ -86,6 +96,14 @@ class HMM:
 
     def get_obs_ts(self):
         return [np.argmax(o) for o in self.obs_tracker]
+
+    @property
+    def current_state(self):
+        return self.state
+
+    @property
+    def current_obs(self):
+        return self.obs
 
 
 def plot_traj(state: Iterable, observation: Iterable):
