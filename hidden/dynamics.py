@@ -11,7 +11,7 @@ class HMM:
         self.n_obs = dim_obs
 
         self.A = np.zeros((self.n_sys, self.n_sys))
-        self.B = np.zeros((self.n_obs, self.n_obs))
+        self.B = np.zeros((self.n_obs, self.n_sys))
 
         self.state_tracker = None
         self.obs_tracker = None
