@@ -150,7 +150,7 @@ class MarkovInfer:
         return likelihood
 
     def _extract_hmm_parameters(
-        theta: np.ndarray, symmetric: Optional[bool] = False
+        self, theta: np.ndarray, symmetric: Optional[bool] = False
     ) -> Tuple[np.ndarray]:
         # NOTE this is strictly for a 2-D HMM
         # Builds the matrix terms from a theta vector. For symmetric models,
@@ -179,6 +179,11 @@ class MarkovInfer:
         B[0, 0], B[1, 1] = 1 - theta[1], 1 - theta[1]
 
         return A, B
+
+    def _import_hmm_parameters(
+        self, theta: np.ndarray, symmetric: Optional[bool] = True
+    ) -> Tuple[np.ndarray]:
+        pass
 
     # Likelihood optimizers:
     def maximize_likleihood(
@@ -229,26 +234,57 @@ class MarkovInfer:
     ) -> Iterable:
         return [lower_lim, upper_lim] * len(param_init)
 
+    def _validate_optimizer_input(
+        self, mode: str, obs_ts: Iterable, **kwargs
+    ) -> Tuple:
+
+        # Check mode of optimization
+        if mode not in ['global', 'baum-welch']:
+            raise NotImplementedError(
+                f"Mode `{mode}` not implemented, must be one of global "
+                "(default) or baum-welch"
+            )
+
+        if mode == 'baum-welch':
+            if kwargs.get(state_ts, None) is None:
+                raise ValueError(
+                    "baum-welch mode requires input kwarg `state_ts`"
+                )
+            cost_func = self._calc_likelihood_baum_welch
+            opt_args = (obs_ts, kwargs.get(state_ts), self)
+        else:
+            cost_func = self._calc_likeihood_optimizer
+            opt_args = (obs_ts, self)
+
+        return cost_func, opt_args
+
     def _optimize_likelihood_local(
         self, obs_ts: Iterable, param_init: Iterable,
-        method: Optional[str]="SLSQP"
-    ) -> OptimizeResult:
+        method: Optional[str]="SLSQP", mode: Optional[str] = 'global',
+        **kwargs
+    ) -> LikelihoodOptResult:
+
+        cost_func, opt_args = self._validate_optimizer_input(mode, obs_ts, **kwargs)
+
         # Local optimization of likelihood using local methods
         bnds = self._build_optimization_bounds(param_init)
         res = so.minimize(
-            self._calc_likeihood_optimizer,
+            cost_func,
             param_init,
-            args=(obs_ts, self),
+            args=opt_args,
             method=method,
             bounds=bnds,
         )
 
-        return LikelihoodOptResult(res, 'local', method=method)
+        modifier = (lambda: "-baum-welch" if mode == "baum-welch" else "")()
+        return LikelihoodOptResult(res, f'local{modifier}', method=method)
 
     def _optimize_likelihood_global(
         self, obs_ts: Iterable, param_init: Iterable,
-        sampling_method: Optional[str] = 'sobol'
-    ) -> OptimizeResult:
+        sampling_method: Optional[str] = 'sobol',
+        mode: Optional[str] = 'global',
+        **kwargs
+    ) -> LikelihoodOptResult:
         # Global optimization of likelihood using SHGO algorithm
         if sampling_method not in ['sobol', 'simplical', 'halton']:
             raise ValueError(
@@ -256,15 +292,19 @@ class MarkovInfer:
                 "`halton`"
             )
 
+        cost_func, opt_args = self._validate_optimizer_input(mode, obs_ts, **kwargs)
+
         bnds = self._build_optimization_bounds(param_init)
         res = so.shgo(
-            self._calc_likelihood_optimizer,
+            cost_func,
             bounds=bnds,
-            args=(obs_ts, self),
+            args=opt_args,
             sampling_method=sampling_method
         )
 
-        return LikelihoodOptResult(res, 'global', sampling_method=sampling_method)
+        modifier = (lambda: "-baum-welch" if mode == 'baum-welch' else '')()
+
+        return LikelihoodOptResult(res, f'global{modifier}', sampling_method=sampling_method)
 
     # Inferrence routines
     def expectation(
@@ -272,43 +312,63 @@ class MarkovInfer:
     ) -> Iterable:
         # NOTE Swap this out for the bayes_smoother
         self.forward_algo(obs_ts, A_est, B_est)
+        self.bayesian_smooth(A_est)
         pred_states = []
-        for est in self.forward_tracker:
+        for est in self.bayes_smoother:
             state = np.array([0, 0])
             state[np.argmax(est)] = 1
             pred_states.append(state)
         return pred_states
 
-    def maximization(self, obs_ts, pred_ts, A_est, B_est):
+    def maximization(self, obs_ts, pred_ts, param_init):
         # Package the variables and pass them into optimizer using
         # _calc_likelihood_baum_welch
-        pass
 
-    def baum_welch(self, maxiter: Optional[int]=100, tolerance: Optional[float]=1e-8):
+        opt_result = self._optimize_likelihood_local(
+            obs_ts, param_init, mode="baum-welch", state_ts=pred_ts
+        )
+        param_opt = opt_result.result
+
+        return param_opt
+
+    # ANCHOR TBC
+    def baum_welch(
+        self, param_init: Iterable, obs_ts: Iterable,
+        maxiter: Optional[int]=100, tolerance: Optional[float]=1e-8
+    ) -> Iterable:
         # Iterate through steps of self.expectation, self.maximization
-        pass
+        A_est, B_est = self._import_hmm_parameters(param_init)
 
+        for iteration in range(maxiter):
+            smoother = self.expectation(obs_ts, A_est, B_est)
 
-# ANCHOR Potentially move this logic to a separate `optimize` module
-# Optimizers
-def local_likelihood_optimizer(
-    est: MarkovInfer, obs_ts: Iterable, method: Optional[str] = "SLSQP"
-):
-    res = so.minimize()
+    # ANCHOR TBC
+    def max_likelihood(
+        self, param_init: Iterable, obs_ts: Iterable,
+        mode: Optional[str] = 'local'
+    ) -> LikelihoodOptResult:        
+        if mode == 'local':
+            return self._optimize_likelihood_local(obs_ts, param_init)
+        elif mode == 'global':
+            return self._optimize_likelihood_global(obs_ts, param_init)
 
 
 if __name__ == "__main__":
     from hidden import dynamics
     hmm = dynamics.HMM(2, 2)
     hmm.init_uniform_cycle()
-    hmm.run_dynamics(100)
+    hmm.run_dynamics(1000)
 
     state_ts = hmm.get_state_ts()
     obs_ts = hmm.get_obs_ts()
 
     BayesInfer = MarkovInfer(2, 2)
+    param_init = (0.15, 0.15)
 
     BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.bayesian_smooth(hmm.A)
+
+    res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
+    res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
 
