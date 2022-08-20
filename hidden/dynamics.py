@@ -28,26 +28,56 @@ class HMM:
         self, trans_rate: Optional[int] = 0.1,
         error_rate: Optional[int] = 0.3
     ):
+        # NOTE This routine assumes that the observation matrix dimension
+        # is equal to the transitionmatrix dimension
+        if self.n_sys != self.n_obs:
+            raise NotImplementedError(
+                "Currently, cycle default matrices can only be instantiated "
+                "when `n_sys` = `n_obs`"
+            )
         self.A = np.zeros((self.n_sys, self.n_sys))
-        self.B = np.zeros((self.n_obs, self.n_obs))
+        self.B = np.zeros((self.n_sys, self.n_sys))
 
         # NOTE that this now assumes a symmetric cycle (fwd rate = back-rate)
         for i in range(self.n_sys):
             for j in range(i + 1, self.n_sys):
                 self.A[i, j] = (lambda x: trans_rate if x == 1 else 0)(np.abs(i - j))
                 self.A[j, i] = self.A[i, j]
+            # For PBCs
+            if i == 0: self.A[self.n_sys - 1, i] = trans_rate
+            if i == self.n_sys - 1: self.A[0, i] = trans_rate
+
             self.A[i, i] = 1 - np.sum(self.A[:, i])
 
         for i in range(self.n_obs):
             for j in range(i + 1, self.n_obs):
                 self.B[i, j] = (lambda x: error_rate if x == 1 else 0)(np.abs(i - j))
                 self.B[j, i] = self.B[i, j]
+            # For PBCs
+            if i == 0: self.B[self.n_obs - 1, i] = error_rate
+            if i == self.n_obs - 1: self.B[0, i] = error_rate
+
             self.B[i, i] = 1 - np.sum(self.B[:, i])
+
+    def _validate_dynamics_matrices(self):
+        A_condition = self.A.sum(axis=0)
+        B_condition = self.B.sum(axis=0)
+
+        if not (A_condition == 0).all():
+            raise ValueError(
+                f"Invalid transition matrix A : {self.A}"
+            )
+        if  not (B_condition == 0).all():
+            raise ValueError(
+                f"Invalid observation matrix B : {self.B}"
+            )
 
     # Dynamics routines
     def run_dynamics(
         self, n_steps: Optional[int] = 100, init_state: Optional[int] = None
     ):
+        self._validate_dynamics_matrices()
+
         if init_state is None:
             self._set_state(np.random.randint(0, self.n_sys))
         self._set_obs(np.argmax(self.state))

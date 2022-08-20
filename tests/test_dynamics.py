@@ -8,6 +8,17 @@ dimension_tests = [(2, 2), (1, 2), (2, 1), (2, 4), (3, 1)]
 A_ident = np.eye(2)
 B_ident = np.eye(2)
 
+uni_cycle_2d = lambda x: np.array([
+    [1 - x, x],
+    [x, 1 - x]
+])
+
+uni_cycle_3d = lambda x: np.array([
+    [1 - 2 * x, x, x],
+    [x, 1 - 2 * x, x],
+    [x, x, 1 - 2 * x]
+])
+
 
 @pytest.mark.parametrize('dimensions', dimension_tests)
 def test_default_initialization(dimensions):
@@ -72,18 +83,64 @@ def test_invalid_obs_assignment_raises(invalid_obs):
         hmm._set_obs(invalid_obs)
 
 
+@pytest.mark.parametrize('cycle_param', [(i, j) for i in [2, 3] for j in [0.1, 0.2, 0.4]])
+def test_uniform_cycle_initialization(cycle_param):
+    # Arrange
+    dim = cycle_param[0]
+    trans_rate = cycle_param[1]
+    hmm = dynamics.HMM(dim, dim)
+
+    if dim == 2:
+        target_matrix = uni_cycle_2d(trans_rate)
+    else:
+        target_matrix = uni_cycle_3d(trans_rate)
+
+    # Act
+    hmm.init_uniform_cycle(trans_rate, trans_rate)
+
+    # Assert
+    assert (hmm.A == target_matrix).all()
+    assert (hmm.B == target_matrix).all()
+
+
+def test_invalid_cycle_initialization_raises():
+    # Arrange
+    hmm = dynamics.HMM(2, 3)
+
+    # Act / Assert
+    with pytest.raises(NotImplementedError):
+        hmm.init_uniform_cycle(0.1, 0.1)
+
+
+def test_invalid_transiton_matrix_raises():
+    # Arrange
+    hmm = dynamics.HMM(2, 2)
+    hmm.init_uniform_cycle()
+
+    # Act
+    hmm.A = 2 * np.eye(2)
+
+    # Assert
+    with pytest.raises(ValueError):
+        hmm._validate_dynamics_matrices()
+
+
+def test_invalid_observation_matrix_raises():
+    # Arrange
+    hmm = dynamics.HMM(2, 2)
+    hmm.init_uniform_cycle()
+
+    # Act
+    hmm.B = 2 * np.eye(2)
+
+    # Assert
+    with pytest.raises(ValueError):
+        hmm._validate_dynamics_matrices()
+
+
 def test_dynamics_default_behaviour():
     pass
 
 
-def test_uniform_cycle_initialization():
-    pass
-
-
-def test_invalid_transiton_matrix_raises():
-    pass
-
-
-def test_invalid_observation_matrix_raises():
-    pass
-
+if __name__ == '__main__':
+    pytest.main([__file__])
