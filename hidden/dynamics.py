@@ -63,11 +63,11 @@ class HMM:
         A_condition = self.A.sum(axis=0)
         B_condition = self.B.sum(axis=0)
 
-        if not (A_condition == 0).all():
+        if not (A_condition == 1).all():
             raise ValueError(
                 f"Invalid transition matrix A : {self.A}"
             )
-        if  not (B_condition == 0).all():
+        if  not (B_condition == 1).all():
             raise ValueError(
                 f"Invalid observation matrix B : {self.B}"
             )
@@ -80,6 +80,9 @@ class HMM:
 
         if init_state is None:
             self._set_state(np.random.randint(0, self.n_sys))
+        else:
+            self._set_state(init_state)
+
         self._set_obs(np.argmax(self.state))
 
         if self.state_tracker is None or self.obs_tracker is None:

@@ -139,8 +139,27 @@ def test_invalid_observation_matrix_raises():
 
 
 def test_dynamics_default_behaviour():
-    pass
+    # Arrange
+    hmm = dynamics.HMM(2, 2)
+    hmm.A = 0.5 * np.ones((2, 2))
+    hmm.B = np.eye(2)
+    n_steps = 5000
 
+    # Act
+    hmm.run_dynamics(n_steps, init_state=0)
+    state_ts = hmm.get_state_ts()
+    obs_ts = hmm.get_obs_ts()
+
+    emp_dist = np.sum(state_ts) / n_steps
+    emp_obs = np.sum(obs_ts) / n_steps
+
+    # Assert
+    assert len(hmm.state_tracker) == n_steps
+    assert len(hmm.obs_tracker) == n_steps
+
+    # assert (state_ts == obs_ts).all()
+    assert emp_dist == emp_obs
+    assert np.isclose(emp_dist, 0.5, atol=1e-2)
 
 if __name__ == '__main__':
     pytest.main([__file__])
