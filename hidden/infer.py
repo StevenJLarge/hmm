@@ -24,6 +24,14 @@ class LikelihoodOptResult:
         for key, val in kwargs.items():
             self.metadata[key] = val
 
+    def __str__(self):
+        return (
+            f"result:\t{self.result}\n"
+            f"method_type:\t{self.type}\n"
+            f"success:\t{self.success}\n"
+            f"metadata:\t{self.metadata}\n"
+        )
+
 class MarkovInfer:
     #Type hints for instance variables
     forward_tracker: Iterable
@@ -150,7 +158,7 @@ class MarkovInfer:
         return likelihood
 
     def _extract_hmm_parameters(
-        self, theta: np.ndarray, symmetric: Optional[bool] = False
+        self, theta: np.ndarray, symmetric: Optional[bool] = True
     ) -> Tuple[np.ndarray]:
         # NOTE this is strictly for a 2-D HMM
         # Builds the matrix terms from a theta vector. For symmetric models,
@@ -205,7 +213,7 @@ class MarkovInfer:
         )
 
     def _calc_likeihood_optimizer(
-        self, param_arr: Iterable, obs_ts: Iterable
+        self, param_arr: Iterable, obs_ts: Iterable, *args
     ) -> float:
         # NOTE Currently this only works for a 2D HMM
         A, B = self._extract_hmm_parameters(param_arr)
@@ -221,18 +229,18 @@ class MarkovInfer:
         self, param_arr: Iterable, obs_ts: Iterable, state_ts: Iterable
     ) -> float:
         # Calculate likelihood assuming full knowledge of hidden state sequenmce
-        _, B = self.extract_hmm_parameters(param_arr)
+        _, B = self._extract_hmm_parameters(param_arr)
         likelihood = 0
         for state, obs in zip(state_ts, obs_ts):
             inner = state @ B[:, obs]
             likelihood -= np.log(inner)
-        return likelihood 
+        return likelihood
 
     def _build_optimization_bounds(
         self, param_init: Iterable,
-        lower_lim: Optional[float] = 0, upper_lim: Optional[float] = 1
+        lower_lim: Optional[float] = 1e-3, upper_lim: Optional[float] = 1 - 1e-3
     ) -> Iterable:
-        return [lower_lim, upper_lim] * len(param_init)
+        return [(lower_lim, upper_lim)] * len(param_init)
 
     def _validate_optimizer_input(
         self, mode: str, obs_ts: Iterable, **kwargs
@@ -251,10 +259,10 @@ class MarkovInfer:
                     "baum-welch mode requires input kwarg `state_ts`"
                 )
             cost_func = self._calc_likelihood_baum_welch
-            opt_args = (obs_ts, kwargs.get(state_ts), self)
+            opt_args = (obs_ts, kwargs.get(state_ts))
         else:
             cost_func = self._calc_likeihood_optimizer
-            opt_args = (obs_ts, self)
+            opt_args = (obs_ts)
 
         return cost_func, opt_args
 
@@ -298,13 +306,19 @@ class MarkovInfer:
         res = so.shgo(
             cost_func,
             bounds=bnds,
-            args=opt_args,
-            sampling_method=sampling_method
+            # NOTE there is a discrepancy here between how shgo and minimize
+            # unpack the args, so we need to force this to be a tuple-nested
+            # list
+            args=tuple([opt_args]),
+            sampling_method=sampling_method,
         )
 
         modifier = (lambda: "-baum-welch" if mode == 'baum-welch' else '')()
 
-        return LikelihoodOptResult(res, f'global{modifier}', sampling_method=sampling_method)
+        return LikelihoodOptResult(
+            res, f'global{modifier}', sampling_method=sampling_method,
+            local_minima=res.xl, local_likelihoods=res.funl
+        )
 
     # Inferrence routines
     def expectation(
@@ -372,3 +386,4 @@ if __name__ == "__main__":
     res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
     res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
 
+    print("--DONE--")
