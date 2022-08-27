@@ -25,8 +25,8 @@ class HMM:
         self.B = B
 
     def init_uniform_cycle(
-        self, trans_rate: Optional[int] = 0.1,
-        error_rate: Optional[int] = 0.3
+        self, trans_rate: Optional[int] = 0.3,
+        error_rate: Optional[int] = 0.1
     ):
         # NOTE This routine assumes that the observation matrix dimension
         # is equal to the transitionmatrix dimension
@@ -38,7 +38,7 @@ class HMM:
         self.A = np.zeros((self.n_sys, self.n_sys))
         self.B = np.zeros((self.n_sys, self.n_sys))
 
-        # NOTE that this now assumes a symmetric cycle (fwd rate = back-rate)
+        # NOTE that this assumes a symmetric cycle (fwd rate = back-rate)
         for i in range(self.n_sys):
             for j in range(i + 1, self.n_sys):
                 self.A[i, j] = (lambda x: trans_rate if x == 1 else 0)(np.abs(i - j))
