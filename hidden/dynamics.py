@@ -79,11 +79,13 @@ class HMM:
         self.state[new_state] = 1
 
     def _set_obs(self, new_obs):
+        if new_obs < 0 or new_obs > self.n_obs:
+            raise IndexError(
+                f"New observation `{new_obs}` out of bounds for system with "
+                f"dimension `{self.n_obs}`"
+            )
         self.obs = np.zeros(self.n_obs)
-        cumul_trans = np.cumsum(self.B[:, new_obs])
-        rand = np.random.uniform(0, cumul_trans[-1])
-        init_obs = np.argmax(rand < cumul_trans)
-        self.obs[init_obs] = 1
+        self.obs[new_obs] = 1
 
     def get_state_ts(self):
         return [np.argmax(s) for s in self.state_tracker]
