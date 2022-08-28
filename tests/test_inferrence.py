@@ -1,5 +1,4 @@
 # Testing suite for inferrence routines
-from jinja2 import pass_context
 import numpy as np
 import pytest
 
