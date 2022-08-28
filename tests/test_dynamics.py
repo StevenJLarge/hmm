@@ -83,11 +83,10 @@ def test_invalid_obs_assignment_raises(invalid_obs):
         hmm._set_obs(invalid_obs)
 
 
-@pytest.mark.parametrize('cycle_param', [(i, j) for i in [2, 3] for j in [0.1, 0.2, 0.4]])
-def test_uniform_cycle_initialization(cycle_param):
+@pytest.mark.parametrize('dim', [2, 3])
+@pytest.mark.parametrize('trans_rate', [0.1, 0.2, 0.3])
+def test_uniform_cycle_initialization(dim, trans_rate):
     # Arrange
-    dim = cycle_param[0]
-    trans_rate = cycle_param[1]
     hmm = dynamics.HMM(dim, dim)
 
     if dim == 2:
