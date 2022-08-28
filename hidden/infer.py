@@ -32,10 +32,12 @@ class LikelihoodOptResult:
             f"metadata:\t{self.metadata}\n"
         )
 
+
 class MarkovInfer:
-    #Type hints for instance variables
+    # Type hints for instance variables
     forward_tracker: Iterable
     backward_tracker: Iterable
+    predictions: Iterable
     n_sys: int
     n_obs: int
 
@@ -49,7 +51,7 @@ class MarkovInfer:
         self.backward_tracker = []
         self.predictions = []
 
-        # Dimension of tareg systema nd observation vector
+        # Dimension of target system and observation vector
         self.n_sys = dim_sys
         self.n_obs = dim_obs
 
@@ -65,8 +67,16 @@ class MarkovInfer:
         self.bayes_filter = np.ones(self.n_sys) / self.n_sys
         self.forward_tracker = []
 
-    def _initialize_pred_tracker(self):
-        self.predictions = []
+    def _initialize_pred_tracker(self, mode: Optional[str] = "forwards"):
+        if mode == "forwards":
+            self.predictions = []
+        elif mode == "backwards":
+            self.predictions_back = []
+        else:
+            raise ValueError(
+                "Invalid directoon in prediction initializer, must "
+                "be `forwards` or `backwards`"
+            )
 
     def _initialize_back_tracker(self):
         # 'initial' value for the back-filter is the final value in the forward
@@ -85,9 +95,14 @@ class MarkovInfer:
         self.bayes_filter = B[:, obs] * self.bayes_filter
         self.bayes_filter /= np.sum(self.bayes_filter)
 
-    def bayesian_back(self, obs: int, A: np.ndarray, B: np.ndarray):
+    def bayesian_back(
+        self, obs: int, A: np.ndarray, B: np.ndarray,
+        prediction_tracker: bool
+    ):
         # Two-step update for back-propagated bayesian filter
         self.back_filter = np.matmul(A.T, self.back_filter)
+        if prediction_tracker:
+            self.predictions_back.append(self.back_filter)
         self.back_filter = B[:, obs] * self.back_filter
         self.back_filter /= np.sum(self.back_filter)
 
@@ -112,42 +127,59 @@ class MarkovInfer:
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray
+        obs_matrix: np.ndarray,
+        prediction_tracker: Optional[bool] = False
     ):
+        if len(self.forward_tracker) != len(observations):
+            self.forward_algo(observations, trans_matrix, obs_matrix)
         self._initialize_back_tracker()
 
+        if prediction_tracker:
+            self._initialize_pred_tracker(mode="backwards")
+
         for obs in np.flip(observations):
-            self.bayesian_back(obs, trans_matrix, obs_matrix)
+            self.bayesian_back(obs, trans_matrix, obs_matrix, prediction_tracker)
             self.backward_tracker.append(self.back_filter)
 
         # NOTE modification here
         self.backward_tracker = np.flip(self.backward_tracker[:-1])
 
-    def bayesian_smooth(self, A: np.ndarray):
+    def bayesian_smooth(
+        self,
+        observations: Iterable[int],
+        trans_matrix: np.ndarray,
+        obs_matrix: np.ndarray
+    ):
+        # Run forward and backward trackers before calcualting smoother
+        self.forward_algo(observations, trans_matrix, obs_matrix)
+        self.backward_algo(observations, trans_matrix, obs_matrix, prediction_tracker=True)
+
         # Combine forward and backward algos to calculate bayesian smoother results
         self.bayes_smoother = [[]] * len(self.forward_tracker)
         self.bayes_smoother[-1] = np.array(self.forward_tracker[-1])
 
         for i in range(len(self.forward_tracker) - 1):
-            # NOTE I think there is a transpose on the A term here? This wont
-            # matter for symmetric dynamics, but will when that is not the case
-            prediction = np.matmul(A.T, self.forward_tracker[-(i + 2)])
-            summand = [np.sum(self.bayes_smoother[-(i+1)] * A[:, j] / prediction) for j in range(A.shape[1])]
+            prediction = self.predictions_back[i + 1]
+            summand = [
+                np.sum(self.bayes_smoother[-(i+1)] * trans_matrix[:, j] / prediction)
+                for j in range(trans_matrix.shape[1])
+            ]
             self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
 
     def discord(self, obs: Iterable) -> float:
         # calculates the discord order parameter, given knowledge of the true
         # underlying states and opbserved sequence
-        if len(self.filter_tracker) - 1 != len(obs):
+        if len(self.forward_tracker) != len(obs):
             raise ValueError(
                 "You must run `forward_algo(...)` before `discord`..."
             )
+        pred_states = [np.argmax(f) for f in self.forward_tracker]
 
-        error = [1 if f == o else -1 for f, o in zip(self.filter_tracker, obs)]
+        error = [1 if f == o else -1 for f, o in zip(pred_states, obs)]
         return 1 - np.mean(error)
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
-        return np.sum([pred_ts == state_ts])/len(state_ts)
+        return 1 - np.sum([p == s for p, s in zip(pred_ts, state_ts)])/len(state_ts)
 
     # Total Likelihood calculation (Brute)
     def calc_likelihood(self, B: np.ndarray, obs_ts: Iterable[int]) -> float:
@@ -381,7 +413,7 @@ if __name__ == "__main__":
 
     BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
-    BayesInfer.bayesian_smooth(hmm.A)
+    BayesInfer.bayesian_smooth(obs_ts, hmm.A, hmm.B)
 
     res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
     res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
