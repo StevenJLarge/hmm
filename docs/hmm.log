@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.23 (TeX Live 2022/dev) (preloaded format=pdflatex 2022.2.7)  16 OCT 2022 12:14
+This is pdfTeX, Version 3.141592653-2.6-1.40.23 (TeX Live 2022/dev) (preloaded format=pdflatex 2022.2.7)  16 OCT 2022 12:21
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -834,18 +834,18 @@ Package rerunfilecheck Info: File `hmm.out' has not changed.
 (rerunfilecheck)             Checksum: 166618E486284E43B24570E3EFFC5080;1608.
  ) 
 Here is how much of TeX's memory you used:
- 32939 strings out of 478278
- 765090 string characters out of 5846548
+ 32966 strings out of 478278
+ 765355 string characters out of 5846548
  1199576 words of memory out of 5000000
- 50576 multiletter control sequences out of 15000+600000
- 524922 words of font info for 53 fonts, out of 8000000 for 9000
+ 50592 multiletter control sequences out of 15000+600000
+ 548185 words of font info for 71 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 99i,11n,103p,866b,609s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 99i,12n,103p,925b,609s stack positions out of 5000i,500n,10000p,200000b,80000s
 {/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/base/8r.enc}{/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/tex-gyre/q-ec.enc}</usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/adobe/utopia/putb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/adobe/utopia/putr8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/public/tex-gyre/qagb.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/public/tex-gyre/qagr.pfb>
-Output written on hmm.pdf (2 pages, 115103 bytes).
+Output written on hmm.pdf (2 pages, 115330 bytes).
 PDF statistics:
- 106 PDF objects out of 1000 (max. 8388607)
- 91 compressed objects within 1 object stream
- 14 named destinations out of 1000 (max. 500000)
+ 108 PDF objects out of 1000 (max. 8388607)
+ 93 compressed objects within 1 object stream
+ 15 named destinations out of 1000 (max. 500000)
  101 words of extra memory for PDF output out of 10000 (max. 10000000)
 
