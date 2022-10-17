@@ -72,7 +72,8 @@ class MarkovInfer:
         # 'initial' value for the back-filter is the final value in the forward
         # filter
         self.back_filter = self.forward_tracker[-1]
-        self.backward_tracker = [self.back_filter]
+        # self.backward_tracker = [self.back_filter]
+        self.backward_tracker = []
 
     def bayesian_filter(
         self, obs: int, A: np.ndarray, B: np.ndarray,
@@ -121,7 +122,7 @@ class MarkovInfer:
             self.backward_tracker.append(self.back_filter)
 
         # NOTE modification here
-        self.backward_tracker = np.flip(self.backward_tracker[:-1])
+        self.backward_tracker = np.flip(self.backward_tracker, axis=0)
 
     def bayesian_smooth(self, A: np.ndarray):
         # Combine forward and backward algos to calculate bayesian smoother results
@@ -360,7 +361,7 @@ class MarkovInfer:
     def max_likelihood(
         self, param_init: Iterable, obs_ts: Iterable,
         mode: Optional[str] = 'local'
-    ) -> LikelihoodOptResult:        
+    ) -> LikelihoodOptResult:
         if mode == 'local':
             return self._optimize_likelihood_local(obs_ts, param_init)
         elif mode == 'global':
