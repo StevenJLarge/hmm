@@ -1,6 +1,6 @@
 # Fdb version 3
-["pdflatex"] 1665944504 "/Users/stevelarge/Research/HMM/docs/hmm.tex" "hmm.pdf" "hmm" 1665944504
-  "/Users/stevelarge/Research/HMM/docs/hmm.tex" 1665944503 1598 6d345f3da1f12371a731dc1fb3280785 ""
+["pdflatex"] 1665959857 "/Users/stevelarge/Research/HMM/docs/hmm.tex" "hmm.pdf" "hmm" 1665959858
+  "/Users/stevelarge/Research/HMM/docs/hmm.tex" 1665959857 1616 902744019ed9860a605bd58980e67b0d ""
   "/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/tex-gyre/q-ec.enc" 1529098226 2457 aaabbccba4df2a7f7371410ee4e075a3 ""
   "/usr/local/texlive/2021/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -223,10 +223,10 @@
   "/usr/local/texlive/2021/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1644299367 4378878 62752c35d22c3378027c9f1398bdff6b ""
   "/usr/local/texlive/2021/texmf-var/web2c/pdftex/pdflatex.fmt" 1644299435 2797382 c241fe4a2b2e96756e28b2d8cb301a8d ""
   "/usr/local/texlive/2021/texmf.cnf" 1616695596 577 4c1911a7228e554c6032256d3cf5567d ""
-  "hmm.aux" 1665944504 2026 4432cf5604c5d06e261e7fe4f2ea163e "pdflatex"
-  "hmm.out" 1665944504 1608 166618e486284e43b24570e3effc5080 "pdflatex"
-  "hmm.tex" 1665944503 1598 6d345f3da1f12371a731dc1fb3280785 ""
-  "hmm.toc" 1665944504 872 efd939a4618d7869280ea603fd26e68a "pdflatex"
+  "hmm.aux" 1665959858 2026 4432cf5604c5d06e261e7fe4f2ea163e "pdflatex"
+  "hmm.out" 1665959858 1608 166618e486284e43b24570e3effc5080 "pdflatex"
+  "hmm.tex" 1665959857 1616 902744019ed9860a605bd58980e67b0d ""
+  "hmm.toc" 1665959858 872 efd939a4618d7869280ea603fd26e68a "pdflatex"
   "slarge_template.sty" 1665943282 1650 154394fc6605b370d8e51ecd5c14983e ""
   (generated)
   "hmm.aux"
