@@ -148,7 +148,7 @@ class MarkovInfer:
         return 1 - np.mean(error)
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
-        return np.sum([pred_ts == state_ts])/len(state_ts)
+        return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
     # Total Likelihood calculation (Brute)
     def calc_likelihood(self, B: np.ndarray, obs_ts: Iterable[int]) -> float:
@@ -327,6 +327,7 @@ class MarkovInfer:
     ) -> Iterable:
         # NOTE Swap this out for the bayes_smoother
         self.forward_algo(obs_ts, A_est, B_est)
+        self.backward_algo(obs_ts, A_est, B_est)
         self.bayesian_smooth(A_est)
         pred_states = []
         for est in self.bayes_smoother:
@@ -349,7 +350,7 @@ class MarkovInfer:
     # ANCHOR TBC
     def baum_welch(
         self, param_init: Iterable, obs_ts: Iterable,
-        maxiter: Optional[int]=100, tolerance: Optional[float]=1e-8
+        maxiter: Optional[int] = 100, tolerance: Optional[float] = 1e-8
     ) -> Iterable:
         # Iterate through steps of self.expectation, self.maximization
         A_est, B_est = self._import_hmm_parameters(param_init)
