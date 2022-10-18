@@ -336,7 +336,9 @@ class MarkovInfer:
             pred_states.append(state)
         return pred_states
 
-    def maximization(self, obs_ts, pred_ts, param_init):
+    def maximization(
+        self, obs_ts: Iterable, pred_ts: Iterable, param_init: np.ndarray
+    ) -> OptimizeResult:
         # Package the variables and pass them into optimizer using
         # _calc_likelihood_baum_welch
 
