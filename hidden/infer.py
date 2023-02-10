@@ -32,6 +32,54 @@ class LikelihoodOptResult:
             f"metadata:\t{self.metadata}\n"
         )
 
+
+class ExpectationResult:
+
+    def __init__(
+        self, bayes_smooth: np.ndarray, bayes_fwd: np.ndarray,
+        bayes_back: np.ndarray, A: np.ndarray, B: np.ndarray
+    ):
+        self.gamma = bayes_smooth
+        self.alpha = bayes_fwd
+        self.beta = bayes_back
+        self.A = A
+        self.B = B
+        self.dim = A.shape[0]
+
+    def alpha_k(self, state: int):
+        return np.array([elem[state] for elem in self.alpha])
+
+    def beta_k(self, state: int):
+        return np.array([elem[state] for elem in self.beta])
+
+    def gamma_k(self, state: int):
+        return np.array([elem[state] for elem in self.gamma])
+
+
+class MaximizationResult:
+    def __init__(
+        self, A_updated: np.ndarray, B_updated: np.ndarray,
+        A_prev: np.ndarray, B_prev: np.ndarray
+    ):
+        self.A = A_updated
+        self.B = B_updated
+        self.A_prev = A_prev
+        self.B_prev = B_prev
+
+
+class BaumWelchOptimizationResult:
+
+    def __init__(
+        self, maxim_res: MaximizationResult, lkly_tracker: Iterable,
+        iterations: int, runtime: Optional[str] = None
+    ):
+        self.A_opt = maxim_res.A
+        self.B_opt = maxim_res.B
+        self.lkly_tracker = lkly_tracker
+        self.iterations = iterations
+        self.runtime = runtime
+
+
 class MarkovInfer:
     #Type hints for instance variables
     forward_tracker: Iterable
@@ -316,34 +364,46 @@ class MarkovInfer:
     # Inferrence routines
     def expectation(
         self, obs_ts: Iterable, A_est: np.ndarray, B_est: np.ndarray
-    ) -> Iterable:
+    ) -> ExpectationResult:
         self.forward_algo(obs_ts, A_est, B_est)
         self.backward_algo(obs_ts, A_est, B_est)
         self.bayesian_smooth(A_est)
-        pred_states = [np.round(prob) for prob in self.bayes_smoother]
-        # A has to get updated here, no chance in the maximization step
-        prob_1 = [prob[1] for prob in pred_states]
-        trans_rate = np.sum(np.abs(np.diff(prob_1))) / (len(prob_1) - 1)
-        # for est in self.bayes_smoother:
-        #     state = np.array([0, 0])
-        #     state[np.argmax(est)] = 1
-        #     pred_states.append(state)
-        return pred_states, trans_rate
+
+        return ExpectationResult(
+            self.bayes_smoother, self.forward_tracker, self.backward_tracker,
+            A_est, B_est
+        )
 
     def maximization(
-        self, obs_ts: Iterable, pred_ts: Iterable, param_init: np.ndarray
-    ) -> OptimizeResult:
-        # Package the variables and pass them into optimizer using
-        # _calc_likelihood_baum_welch
+        self, exp_result: ExpectationResult
+    ) -> MaximizationResult:
+        # Calc xi term from expectation result
+        xi = self._calc_xi_term(exp_result)
+        # Update matrices
+        return self._update_matrices(exp_result, xi)
 
-        opt_result = self._optimize_likelihood_local(
-            obs_ts, param_init, mode="baum-welch", state_ts=pred_ts
-        )
-        param_opt = opt_result.result
+    def _calc_xi_term(self, exp: ExpectationResult) -> np.ndarray:
+        xi = np.zeros((exp.dim, exp.dim, len(exp.gamma) - 1))
+        normalization = np.zeros(xi.shape[2])
+        for i in range(exp.dim):
+            for j in range(exp.dim):
+                xi[i, j, :] = exp.alpha_k(j)[:-1] * exp.A[i, j] * exp.beta_k(i)[1:] * exp.B[j, j]
+                normalization += xi[i, j, :]
 
-        return param_opt, opt_result.likelihood
+        return xi / normalization
 
-    # ANCHOR TBC
+    def _update_matrices(self, exp: ExpectationResult, xi: np.ndarray):
+        A_new = np.zeros_like(exp.A)
+        B_new = np.zeros_like(exp.B)
+
+        for i in range(exp.dim):
+            for j in range(exp.dim):
+                A_new[i, j] = np.sum(xi[i, j, :]) / np.sum(exp.gamma_k(j)[:-1])
+                B_new[i, j] = np.sum(exp.gamma_k(j)[np.array(obs_ts) == i]) / np.sum(exp.gamma_k(j))
+
+        return MaximizationResult(A_new, B_new, exp.A, exp.B)
+
+    # ANCHOR READY FOR TESTING
     def baum_welch(
         self, param_init: Iterable, obs_ts: Iterable,
         maxiter: Optional[int] = 100, tolerance: Optional[float] = 1e-8
@@ -351,21 +411,16 @@ class MarkovInfer:
         # Iterate through steps of self.expectation, self.maximization
         opt_param = param_init
         A_est, B_est = self._extract_hmm_parameters(opt_param)
-
-        # For testing
-        param_tracker = []
         lkly_tracker = []
 
-        for _ in range(maxiter):
-            A_est, B_est = self._extract_hmm_parameters(opt_param)
-            state_pred, inf_trans_rate = self.expectation(obs_ts, A_est, B_est)
-            opt_param = (inf_trans_rate, opt_param[1])
-            # A_est = self._update_hidden_estimate(A_est, inf_trans_rate)
-            opt_param, lkly = self.maximization(obs_ts, state_pred, opt_param)
-            param_tracker.append(opt_param)
-            lkly_tracker.append(lkly)
+        # TODO Add in tolerance checks based on likelihood
+        for iterations in range(maxiter):
+            exp = self.expectation(obs_ts, A_est, B_est)
+            maxim = self.maximization(exp)
+            A_est, B_est = maxim.A, maxim.B
+            lkly_tracker.append(self.calc_likelihood(B_est, obs_ts))
 
-        return opt_param, param_tracker, lkly_tracker
+        return BaumWelchOptimizationResult(maxim, lkly_tracker, iterations)
 
     def _update_hidden_estimate(self, A_est: np.ndarray, trans_rate: float):
         A_est = np.diag([trans_rate] * self.n_sys)
