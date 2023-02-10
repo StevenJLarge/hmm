@@ -33,6 +33,53 @@ class LikelihoodOptResult:
         )
 
 
+class ExpectationResult:
+
+    def __init__(
+        self, bayes_smooth: np.ndarray, bayes_fwd: np.ndarray,
+        bayes_back: np.ndarray, A: np.ndarray, B: np.ndarray
+    ):
+        self.gamma = bayes_smooth
+        self.alpha = bayes_fwd
+        self.beta = bayes_back
+        self.A = A
+        self.B = B
+        self.dim = A.shape[0]
+
+    def alpha_k(self, state: int):
+        return np.array([elem[state] for elem in self.alpha])
+
+    def beta_k(self, state: int):
+        return np.array([elem[state] for elem in self.beta])
+
+    def gamma_k(self, state: int):
+        return np.array([elem[state] for elem in self.gamma])
+
+
+class MaximizationResult:
+    def __init__(
+        self, A_updated: np.ndarray, B_updated: np.ndarray,
+        A_prev: np.ndarray, B_prev: np.ndarray
+    ):
+        self.A = A_updated
+        self.B = B_updated
+        self.A_prev = A_prev
+        self.B_prev = B_prev
+
+
+class BaumWelchOptimizationResult:
+
+    def __init__(
+        self, maxim_res: MaximizationResult, lkly_tracker: Iterable,
+        iterations: int, runtime: Optional[str] = None
+    ):
+        self.A_opt = maxim_res.A
+        self.B_opt = maxim_res.B
+        self.lkly_tracker = lkly_tracker
+        self.iterations = iterations
+        self.runtime = runtime
+
+
 class MarkovInfer:
     # Type hints for instance variables
     forward_tracker: Iterable
@@ -56,14 +103,16 @@ class MarkovInfer:
         self.n_obs = dim_obs
 
         # Default initialization values for bayes filer, backward filter, and
-        # bayessmoother instance variables
+        # bayes smoother instance variables
         self.bayes_filter = None
         self.backward_filter = None
         self.bayes_smoother = None
 
     def _initialize_bayes_tracker(self):
-        # Initialize a naive bayes filter and initialize the forawrd_tracker
+        # Initialize a naive bayes filter and initialize the forward_tracker
         # list with it
+        # NOTE is this the best initial condition? Its more an agnostic prior
+        # rather than a naive prior...
         self.bayes_filter = np.ones(self.n_sys) / self.n_sys
         self.forward_tracker = []
 
@@ -82,7 +131,8 @@ class MarkovInfer:
         # 'initial' value for the back-filter is the final value in the forward
         # filter
         self.back_filter = self.forward_tracker[-1]
-        self.backward_tracker = [self.back_filter]
+        # self.backward_tracker = [self.back_filter]
+        self.backward_tracker = []
 
     def bayesian_filter(
         self, obs: int, A: np.ndarray, B: np.ndarray,
@@ -142,28 +192,31 @@ class MarkovInfer:
             self.backward_tracker.append(self.back_filter)
 
         # NOTE modification here
-        self.backward_tracker = np.flip(self.backward_tracker[:-1])
+        self.backward_tracker = np.flip(self.backward_tracker, axis=0)
 
     def bayesian_smooth(
-        self,
-        observations: Iterable[int],
-        trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray
+        self, A: np.ndarray
+        # observations: Iterable[int],
+        # trans_matrix: np.ndarray,
+        # obs_matrix: np.ndarray
     ):
         # Run forward and backward trackers before calcualting smoother
-        self.forward_algo(observations, trans_matrix, obs_matrix)
-        self.backward_algo(observations, trans_matrix, obs_matrix, prediction_tracker=True)
+        # self.forward_algo(observations, trans_matrix, obs_matrix)
+        # self.backward_algo(observations, trans_matrix, obs_matrix, prediction_tracker=True)
 
         # Combine forward and backward algos to calculate bayesian smoother results
         self.bayes_smoother = [[]] * len(self.forward_tracker)
         self.bayes_smoother[-1] = np.array(self.forward_tracker[-1])
 
         for i in range(len(self.forward_tracker) - 1):
-            prediction = self.predictions_back[i + 1]
-            summand = [
-                np.sum(self.bayes_smoother[-(i+1)] * trans_matrix[:, j] / prediction)
-                for j in range(trans_matrix.shape[1])
-            ]
+            prediction = np.matmul(A.T, self.forward_tracker[-(i + 2)])
+            summand = [np.sum(self.bayes_smoother[-(i+1)] * A[:, j] / prediction) for j in range(A.shape[1])]
+
+            #prediction = self.predictions_back[i + 1]
+            #summand = [
+            #    np.sum(self.bayes_smoother[-(i+1)] * trans_matrix[:, j] / prediction)
+            #    for j in range(trans_matrix.shape[1])
+            #]
             self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
 
     def discord(self, obs: Iterable) -> float:
@@ -179,13 +232,35 @@ class MarkovInfer:
         return 1 - np.mean(error)
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
-        return 1 - np.sum([p == s for p, s in zip(pred_ts, state_ts)])/len(state_ts)
+        return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
     # Total Likelihood calculation (Brute)
+    # TODO Can probably vectorize this
     def calc_likelihood(self, B: np.ndarray, obs_ts: Iterable[int]) -> float:
         likelihood = 0
         for bayes, obs in zip(self.predictions, obs_ts):
             inner = bayes @ B[:, obs]
+            likelihood -= np.log(inner)
+        return likelihood
+
+    def _calc_likeihood_optimizer(
+        self, param_arr: Iterable, obs_ts: Iterable, *args
+    ) -> float:
+        # NOTE Currently this only works for a 2D HMM
+        A, B = self._extract_hmm_parameters(param_arr)
+        # This populates the self.predictions array, which is used by the
+        # calc_likelihood below
+        self.forward_algo(obs_ts, A, B, prediction_tracker=True)
+        return self.calc_likelihood(B, obs_ts)
+
+    def _calc_likelihood_baum_welch(
+        self, param_arr: Iterable, obs_ts: Iterable, state_ts: Iterable
+    ) -> float:
+        # Calculate likelihood assuming full knowledge of hidden state sequence
+        _, B = self._extract_hmm_parameters(param_arr)
+        likelihood = 0
+        for state, obs in zip(state_ts, obs_ts):
+            inner = state @ B[:, obs]
             likelihood -= np.log(inner)
         return likelihood
 
@@ -220,17 +295,11 @@ class MarkovInfer:
 
         return A, B
 
-    def _import_hmm_parameters(
-        self, theta: np.ndarray, symmetric: Optional[bool] = True
-    ) -> Tuple[np.ndarray]:
-        pass
-
     # Likelihood optimizers:
     def maximize_likleihood(
         self, obs_ts: Iterable, method: Optional[str] = "local"
     ) -> OptimizeResult:
         # NOTE Should I pass in optimization parameters for each submethod?
-
         if method == 'baum-welch':
             raise NotImplementedError(
                 '`baum-welch` algorithm not currently implemented'
@@ -243,30 +312,6 @@ class MarkovInfer:
         raise ValueError(
             f"Method {method} is invalid, must be `local` or `global`..."
         )
-
-    def _calc_likeihood_optimizer(
-        self, param_arr: Iterable, obs_ts: Iterable, *args
-    ) -> float:
-        # NOTE Currently this only works for a 2D HMM
-        A, B = self._extract_hmm_parameters(param_arr)
-        self.forward_algo(obs_ts, A, B, prediction_tracker=True)
-
-        likelihood = 0
-        for bayes, obs, in zip(self.predictions, obs_ts):
-            inner = bayes @ B[:, obs]
-            likelihood -= np.log(inner)
-        return likelihood
-
-    def _calc_likelihood_baum_welch(
-        self, param_arr: Iterable, obs_ts: Iterable, state_ts: Iterable
-    ) -> float:
-        # Calculate likelihood assuming full knowledge of hidden state sequenmce
-        _, B = self._extract_hmm_parameters(param_arr)
-        likelihood = 0
-        for state, obs in zip(state_ts, obs_ts):
-            inner = state @ B[:, obs]
-            likelihood -= np.log(inner)
-        return likelihood
 
     def _build_optimization_bounds(
         self, param_init: Iterable,
@@ -286,12 +331,12 @@ class MarkovInfer:
             )
 
         if mode == 'baum-welch':
-            if kwargs.get(state_ts, None) is None:
+            if "state_ts" not in kwargs:
                 raise ValueError(
                     "baum-welch mode requires input kwarg `state_ts`"
                 )
             cost_func = self._calc_likelihood_baum_welch
-            opt_args = (obs_ts, kwargs.get(state_ts))
+            opt_args = (obs_ts, kwargs['state_ts'])
         else:
             cost_func = self._calc_likeihood_optimizer
             opt_args = (obs_ts)
@@ -355,44 +400,74 @@ class MarkovInfer:
     # Inferrence routines
     def expectation(
         self, obs_ts: Iterable, A_est: np.ndarray, B_est: np.ndarray
-    ) -> Iterable:
-        # NOTE Swap this out for the bayes_smoother
+    ) -> ExpectationResult:
         self.forward_algo(obs_ts, A_est, B_est)
+        self.backward_algo(obs_ts, A_est, B_est)
         self.bayesian_smooth(A_est)
-        pred_states = []
-        for est in self.bayes_smoother:
-            state = np.array([0, 0])
-            state[np.argmax(est)] = 1
-            pred_states.append(state)
-        return pred_states
 
-    def maximization(self, obs_ts, pred_ts, param_init):
-        # Package the variables and pass them into optimizer using
-        # _calc_likelihood_baum_welch
-
-        opt_result = self._optimize_likelihood_local(
-            obs_ts, param_init, mode="baum-welch", state_ts=pred_ts
+        return ExpectationResult(
+            self.bayes_smoother, self.forward_tracker, self.backward_tracker,
+            A_est, B_est
         )
-        param_opt = opt_result.result
 
-        return param_opt
+    def maximization(
+        self, exp_result: ExpectationResult
+    ) -> MaximizationResult:
+        # Calc xi term from expectation result
+        xi = self._calc_xi_term(exp_result)
+        # Update matrices
+        return self._update_matrices(exp_result, xi)
 
-    # ANCHOR TBC
+    def _calc_xi_term(self, exp: ExpectationResult) -> np.ndarray:
+        xi = np.zeros((exp.dim, exp.dim, len(exp.gamma) - 1))
+        normalization = np.zeros(xi.shape[2])
+        for i in range(exp.dim):
+            for j in range(exp.dim):
+                xi[i, j, :] = exp.alpha_k(j)[:-1] * exp.A[i, j] * exp.beta_k(i)[1:] * exp.B[j, j]
+                normalization += xi[i, j, :]
+
+        return xi / normalization
+
+    def _update_matrices(self, exp: ExpectationResult, xi: np.ndarray):
+        A_new = np.zeros_like(exp.A)
+        B_new = np.zeros_like(exp.B)
+
+        for i in range(exp.dim):
+            for j in range(exp.dim):
+                A_new[i, j] = np.sum(xi[i, j, :]) / np.sum(exp.gamma_k(j)[:-1])
+                B_new[i, j] = np.sum(exp.gamma_k(j)[np.array(obs_ts) == i]) / np.sum(exp.gamma_k(j))
+
+        return MaximizationResult(A_new, B_new, exp.A, exp.B)
+
+    # ANCHOR READY FOR TESTING
     def baum_welch(
         self, param_init: Iterable, obs_ts: Iterable,
-        maxiter: Optional[int]=100, tolerance: Optional[float]=1e-8
+        maxiter: Optional[int] = 100, tolerance: Optional[float] = 1e-8
     ) -> Iterable:
         # Iterate through steps of self.expectation, self.maximization
-        A_est, B_est = self._import_hmm_parameters(param_init)
+        opt_param = param_init
+        A_est, B_est = self._extract_hmm_parameters(opt_param)
+        lkly_tracker = []
 
-        for iteration in range(maxiter):
-            smoother = self.expectation(obs_ts, A_est, B_est)
+        # TODO Add in tolerance checks based on likelihood
+        for iterations in range(maxiter):
+            exp = self.expectation(obs_ts, A_est, B_est)
+            maxim = self.maximization(exp)
+            A_est, B_est = maxim.A, maxim.B
+            lkly_tracker.append(self.calc_likelihood(B_est, obs_ts))
+
+        return BaumWelchOptimizationResult(maxim, lkly_tracker, iterations)
+
+    def _update_hidden_estimate(self, A_est: np.ndarray, trans_rate: float):
+        A_est = np.diag([trans_rate] * self.n_sys)
+        A_est += np.fliplr(np.diag([1 - trans_rate] * self.n_sys))
+        return A_est
 
     # ANCHOR TBC
     def max_likelihood(
         self, param_init: Iterable, obs_ts: Iterable,
         mode: Optional[str] = 'local'
-    ) -> LikelihoodOptResult:        
+    ) -> LikelihoodOptResult:
         if mode == 'local':
             return self._optimize_likelihood_local(obs_ts, param_init)
         elif mode == 'global':
@@ -417,5 +492,7 @@ if __name__ == "__main__":
 
     res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
     res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
+
+    res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 
     print("--DONE--")
