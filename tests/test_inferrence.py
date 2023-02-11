@@ -150,7 +150,7 @@ def test_smoothing_algorithm_tracking(test_hmm):
     # Act
     test_hmm.run_dynamics(n_steps)
     obs_ts = test_hmm.get_obs_ts()
-    BayesInfer.bayesian_smooth(obs_ts, test_hmm.A, test_hmm.B)
+    BayesInfer.bayesian_smooth(test_hmm.A)
 
     # Assert
     assert len(BayesInfer.bayes_smoother) == len(obs_ts)
