@@ -158,6 +158,38 @@ def test_smoothing_algorithm_tracking(test_hmm):
     assert len(BayesInfer.bayes_smoother) == len(obs_ts)
 
 
+def test_smoothing_on_uninitialized_forward_tracker_raises(test_hmm):
+    # Arrange
+    n_steps = 10
+    BayesInfer = infer.MarkovInfer(2, 2)
+
+    # Act
+    test_hmm.run_dynamics(n_steps)
+    obs_ts = test_hmm.get_obs_ts()
+    BayesInfer.backward_algo(obs_ts, test_hmm.A, test_hmm.B)
+    # NOTE I dont like this behaviour...
+    BayesInfer._initialize_bayes_tracker()
+
+    # Asset
+    with pytest.raises(ValueError):
+        BayesInfer.bayesian_smooth(test_hmm.A)
+
+
+def test_smoothing_on_uninitialized_backward_tracker_raises(test_hmm):
+    # Arrange
+    n_steps = 10
+    BayesInfer = infer.MarkovInfer(2, 2)
+
+    # Act
+    test_hmm.run_dynamics(n_steps)
+    obs_ts = test_hmm.get_obs_ts()
+    BayesInfer.forward_algo(obs_ts, test_hmm.A, test_hmm.B)
+
+    # Asset
+    with pytest.raises(ValueError):
+        BayesInfer.bayesian_smooth(test_hmm.A)
+
+
 def test_discord_calculation(default_hmm):
     # Arrange
     BayesInfer = infer.MarkovInfer(2, 2)
