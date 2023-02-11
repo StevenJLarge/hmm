@@ -150,6 +150,8 @@ def test_smoothing_algorithm_tracking(test_hmm):
     # Act
     test_hmm.run_dynamics(n_steps)
     obs_ts = test_hmm.get_obs_ts()
+    BayesInfer.forward_algo(obs_ts, test_hmm.A, test_hmm.B)
+    BayesInfer.backward_algo(obs_ts, test_hmm.A, test_hmm.B)
     BayesInfer.bayesian_smooth(test_hmm.A)
 
     # Assert
