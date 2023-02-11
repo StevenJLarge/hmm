@@ -115,6 +115,7 @@ class MarkovInfer:
         # rather than a naive prior...
         self.bayes_filter = np.ones(self.n_sys) / self.n_sys
         self.forward_tracker = []
+        self.backward_tracker = []
 
     def _initialize_pred_tracker(self, mode: Optional[str] = "forwards"):
         if mode == "forwards":
@@ -194,15 +195,19 @@ class MarkovInfer:
         # NOTE modification here
         self.backward_tracker = np.flip(self.backward_tracker, axis=0)
 
-    def bayesian_smooth(
-        self, A: np.ndarray
-        # observations: Iterable[int],
-        # trans_matrix: np.ndarray,
-        # obs_matrix: np.ndarray
-    ):
-        # Run forward and backward trackers before calcualting smoother
-        # self.forward_algo(observations, trans_matrix, obs_matrix)
-        # self.backward_algo(observations, trans_matrix, obs_matrix, prediction_tracker=True)
+    def bayesian_smooth(self, A: np.ndarray):
+        # Check to ensure that forward and backward algos have been run before this
+        if (len(self.forward_tracker) == 0):
+            raise ValueError(
+                'forward_tracker is empty, you must run forward_algo before '
+                + 'bayesian_smooth'
+            )
+
+        if (len(self.backward_tracker) == 0):
+            raise ValueError(
+                'backward_tracker is empty, you must run backward_algo before '
+                + 'bayesian_smooth'
+            )
 
         # Combine forward and backward algos to calculate bayesian smoother results
         self.bayes_smoother = [[]] * len(self.forward_tracker)
@@ -211,12 +216,6 @@ class MarkovInfer:
         for i in range(len(self.forward_tracker) - 1):
             prediction = np.matmul(A.T, self.forward_tracker[-(i + 2)])
             summand = [np.sum(self.bayes_smoother[-(i+1)] * A[:, j] / prediction) for j in range(A.shape[1])]
-
-            #prediction = self.predictions_back[i + 1]
-            #summand = [
-            #    np.sum(self.bayes_smoother[-(i+1)] * trans_matrix[:, j] / prediction)
-            #    for j in range(trans_matrix.shape[1])
-            #]
             self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
 
     def discord(self, obs: Iterable) -> float:
