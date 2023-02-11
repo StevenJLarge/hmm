@@ -410,12 +410,12 @@ class MarkovInfer:
         )
 
     def maximization(
-        self, exp_result: ExpectationResult
+        self, exp_result: ExpectationResult, obs_ts: Iterable
     ) -> MaximizationResult:
         # Calc xi term from expectation result
         xi = self._calc_xi_term(exp_result)
         # Update matrices
-        return self._update_matrices(exp_result, xi)
+        return self._update_matrices(exp_result, xi, obs_ts)
 
     def _calc_xi_term(self, exp: ExpectationResult) -> np.ndarray:
         xi = np.zeros((exp.dim, exp.dim, len(exp.gamma) - 1))
@@ -427,7 +427,9 @@ class MarkovInfer:
 
         return xi / normalization
 
-    def _update_matrices(self, exp: ExpectationResult, xi: np.ndarray):
+    def _update_matrices(
+        self, exp: ExpectationResult, xi: np.ndarray, obs_ts: Iterable
+    ) -> MaximizationResult:
         A_new = np.zeros_like(exp.A)
         B_new = np.zeros_like(exp.B)
 
@@ -451,7 +453,7 @@ class MarkovInfer:
         # TODO Add in tolerance checks based on likelihood
         for iterations in range(maxiter):
             exp = self.expectation(obs_ts, A_est, B_est)
-            maxim = self.maximization(exp)
+            maxim = self.maximization(exp, obs_ts)
             A_est, B_est = maxim.A, maxim.B
             lkly_tracker.append(self.calc_likelihood(B_est, obs_ts))
 
