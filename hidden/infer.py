@@ -400,8 +400,9 @@ class MarkovInfer:
     def expectation(
         self, obs_ts: Iterable, A_est: np.ndarray, B_est: np.ndarray
     ) -> ExpectationResult:
-        self.forward_algo(obs_ts, A_est, B_est)
-        self.backward_algo(obs_ts, A_est, B_est)
+        # Prediction trackers need to be true for likelihood calcualtion
+        self.forward_algo(obs_ts, A_est, B_est, prediction_tracker=True)
+        self.backward_algo(obs_ts, A_est, B_est, prediction_tracker=True)
         self.bayesian_smooth(A_est)
 
         return ExpectationResult(
@@ -413,16 +414,18 @@ class MarkovInfer:
         self, exp_result: ExpectationResult, obs_ts: Iterable
     ) -> MaximizationResult:
         # Calc xi term from expectation result
-        xi = self._calc_xi_term(exp_result)
+        xi = self._calc_xi_term(exp_result, obs_ts)
         # Update matrices
         return self._update_matrices(exp_result, xi, obs_ts)
 
-    def _calc_xi_term(self, exp: ExpectationResult) -> np.ndarray:
+    def _calc_xi_term(
+        self, exp: ExpectationResult, obs_ts: np.ndarray
+    ) -> np.ndarray:
         xi = np.zeros((exp.dim, exp.dim, len(exp.gamma) - 1))
         normalization = np.zeros(xi.shape[2])
         for i in range(exp.dim):
             for j in range(exp.dim):
-                xi[i, j, :] = exp.alpha_k(j)[:-1] * exp.A[i, j] * exp.beta_k(i)[1:] * exp.B[j, j]
+                xi[i, j, :] = exp.alpha_k(j)[:-1] * exp.A[i, j] * exp.beta_k(i)[1:] * exp.B[i, obs_ts[1:]]
                 normalization += xi[i, j, :]
 
         return xi / normalization
@@ -435,7 +438,7 @@ class MarkovInfer:
 
         for i in range(exp.dim):
             for j in range(exp.dim):
-                A_new[i, j] = np.sum(xi[i, j, :]) / np.sum(exp.gamma_k(j)[:-1])
+                A_new[i, j] = np.sum(xi[i, j, :]) / np.sum(exp.gamma_k(i)[:-1])
                 B_new[i, j] = np.sum(exp.gamma_k(j)[np.array(obs_ts) == i]) / np.sum(exp.gamma_k(j))
 
         return MaximizationResult(A_new, B_new, exp.A, exp.B)
