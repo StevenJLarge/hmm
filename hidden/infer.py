@@ -57,6 +57,7 @@ class ExpectationResult:
 
 
 class MaximizationResult:
+
     def __init__(
         self, A_updated: np.ndarray, B_updated: np.ndarray,
         A_prev: np.ndarray, B_prev: np.ndarray
@@ -91,7 +92,7 @@ class MarkovInfer:
     bayes_filter: Iterable
     backward_filter: Iterable
     bayes_smoother: Iterable
-
+ 
     def __init__(self, dim_sys: int, dim_obs: int):
         # Tracker lists for forward and backward estimates
         self.forward_tracker = []
@@ -124,7 +125,7 @@ class MarkovInfer:
             self.predictions_back = []
         else:
             raise ValueError(
-                "Invalid directoon in prediction initializer, must "
+                "Invalid direction in prediction initializer, must "
                 "be `forwards` or `backwards`"
             )
 
@@ -218,16 +219,10 @@ class MarkovInfer:
             summand = [np.sum(self.bayes_smoother[-(i+1)] * A[:, j] / prediction) for j in range(A.shape[1])]
             self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
 
-    def discord(self, obs: Iterable) -> float:
+    def discord(self, obs: Iterable, filter_est: Iterable) -> float:
         # calculates the discord order parameter, given knowledge of the true
         # underlying states and opbserved sequence
-        if len(self.forward_tracker) != len(obs):
-            raise ValueError(
-                "You must run `forward_algo(...)` before `discord`..."
-            )
-        pred_states = [np.argmax(f) for f in self.forward_tracker]
-
-        error = [1 if f == o else -1 for f, o in zip(pred_states, obs)]
+        error = [1 if f == o else -1 for f, o in zip(filter_est, obs)]
         return 1 - np.mean(error)
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
@@ -439,7 +434,7 @@ class MarkovInfer:
         for i in range(exp.dim):
             for j in range(exp.dim):
                 A_new[i, j] = np.sum(xi[i, j, :]) / np.sum(exp.gamma_k(i)[:-1])
-                B_new[i, j] = np.sum(exp.gamma_k(j)[np.array(obs_ts) == i]) / np.sum(exp.gamma_k(j))
+                B_new[i, j] = np.sum(exp.gamma_k(i)[np.array(obs_ts) == j]) / np.sum(exp.gamma_k(i))
 
         return MaximizationResult(A_new, B_new, exp.A, exp.B)
 
@@ -453,7 +448,7 @@ class MarkovInfer:
         A_est, B_est = self._extract_hmm_parameters(opt_param)
         lkly_tracker = []
 
-        # TODO Add in tolerance checks based on likelihood
+        # TODO Add in tolerance checks based on parameter updates (we have no measure fo CDLL, right?)
         for iterations in range(maxiter):
             exp = self.expectation(obs_ts, A_est, B_est)
             maxim = self.maximization(exp, obs_ts)
