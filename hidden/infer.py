@@ -436,7 +436,12 @@ class MarkovInfer:
                 A_new[i, j] = np.sum(xi[i, j, :]) / np.sum(exp.gamma_k(i)[:-1])
                 B_new[i, j] = np.sum(exp.gamma_k(i)[np.array(obs_ts) == j]) / np.sum(exp.gamma_k(i))
 
-        return MaximizationResult(A_new, B_new, exp.A, exp.B)
+        # normalize results to enforce probability conservation
+        for col in range(A_new.shape[1]):
+            A_new[:, col] = A_new[:, col] / np.sum(A_new[:, col])
+            B_new[:, col] = B_new[:, col] / np.sum(B_new[:, col])
+
+        return MaximizationResult(A_new, B_new, exp.A[:, :], exp.B[:, :])
 
     # ANCHOR READY FOR TESTING
     def baum_welch(
@@ -446,16 +451,20 @@ class MarkovInfer:
         # Iterate through steps of self.expectation, self.maximization
         opt_param = param_init
         A_est, B_est = self._extract_hmm_parameters(opt_param)
-        lkly_tracker = []
+        param_tracker = []
 
         # TODO Add in tolerance checks based on parameter updates (we have no measure fo CDLL, right?)
-        for iterations in range(maxiter):
+        for iteration in range(maxiter):
             exp = self.expectation(obs_ts, A_est, B_est)
             maxim = self.maximization(exp, obs_ts)
             A_est, B_est = maxim.A, maxim.B
-            lkly_tracker.append(self.calc_likelihood(B_est, obs_ts))
+            param_tracker.append({
+                'iteration': iteration,
+                'A_est': A_est[:, :],
+                'B_est': B_est[:, :]
+            })
 
-        return BaumWelchOptimizationResult(maxim, lkly_tracker, iterations)
+        return BaumWelchOptimizationResult(maxim, param_tracker, iteration)
 
     def _update_hidden_estimate(self, A_est: np.ndarray, trans_rate: float):
         A_est = np.diag([trans_rate] * self.n_sys)
@@ -487,7 +496,7 @@ if __name__ == "__main__":
 
     BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
-    BayesInfer.bayesian_smooth(obs_ts, hmm.A, hmm.B)
+    BayesInfer.bayesian_smooth(hmm.A)
 
     res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
     res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
