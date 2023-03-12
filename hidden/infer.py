@@ -196,6 +196,49 @@ class MarkovInfer:
         # NOTE modification here
         self.backward_tracker = np.flip(self.backward_tracker, axis=0)
 
+    def alpha(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
+        alpha = B[:, obs_ts[0]]
+        self.alpha_tracker = [alpha]
+        for obs in obs_ts[1:]:
+            # update alpha term
+            alpha = (A @ alpha) * B[:, obs]
+            self.alpha_tracker.append(alpha)
+
+    def beta(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
+        beta = np.ones(2)
+        self.beta_tracker = [beta]
+        for obs in obs_ts[-1:1:-1]:
+            beta = A.T @ (beta * B[:, obs])
+            self.beta_tracker.append(beta)
+        # reverse ordering
+        self.beta_tracker = self.beta_tracker[::-1]
+
+    def likelihood_alpha_beta(self):
+        if self.alpha_tracker is None:
+            raise ValueError(
+                "Must run alpha(...) before calculating liklihood..."
+            )
+
+        if self.beta_tracker is None:
+            raise ValueError(
+                "Must run beta(...) before calculating likelihood..."
+            )
+
+        self.likelihood_tracker_ab = []
+        for a, b in zip(self.alpha_tracker, self.beta_tracker):
+            self.likelihood_tracker_ab.append(np.sum(a * b))
+
+    def bayesian_smooth_alpha_beta(self):
+        if self.beta_tracker is None or self.alpha_tracker is None or self.likelihood_tracker_ab is None:
+            raise ValueError(
+                "Must run alpha(...), beta(...), and "
+                "likelihood_alpha_beta(...) before calcualting smoothed "
+                "estimate..."
+            )
+        self.bayes_alpha_beta = []
+        for a, b, l in zip(self.alpha_tracker, self.beta_tracker, self.likelihood_tracker_ab):
+            self.bayes_alpha_beta.append(a * b / l)
+
     def bayesian_smooth(self, A: np.ndarray):
         # Check to ensure that forward and backward algos have been run before this
         if (len(self.forward_tracker) == 0):
@@ -498,9 +541,12 @@ if __name__ == "__main__":
     BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.bayesian_smooth(hmm.A)
 
-    res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
-    res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
+    BayesInfer.alpha(hmm.A, hmm.B, obs_ts)
+    BayesInfer.beta(hmm.A, hmm.B, obs_ts)
 
-    res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
+    # res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
+    # res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
+
+    # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 
     print("--DONE--")
