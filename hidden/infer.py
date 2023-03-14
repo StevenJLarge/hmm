@@ -207,11 +207,11 @@ class MarkovInfer:
     def beta(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
         beta = np.ones(2)
         self.beta_tracker = [beta]
-        for obs in obs_ts[-1:1:-1]:
+        for obs in obs_ts[-1::-1]:
             beta = A.T @ (beta * B[:, obs])
             self.beta_tracker.append(beta)
         # reverse ordering
-        self.beta_tracker = self.beta_tracker[::-1]
+        self.beta_tracker = self.beta_tracker[::-1][1:]
 
     def likelihood_alpha_beta(self):
         if self.alpha_tracker is None:
