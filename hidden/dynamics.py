@@ -138,6 +138,12 @@ class HMM:
     def current_obs(self):
         return self.obs
 
+    @property
+    def steady_state(self):
+        e_vals, e_vecs = np.linalg.eig(self.A)
+        ss_idx = np.argmin(np.abs(1 - e_vals))
+        return e_vecs[:, ss_idx] / np.sum(e_vecs[:, ss_idx])
+
 
 def plot_traj(state: Iterable, observation: Iterable):
     import matplotlib.pyplot as plt
