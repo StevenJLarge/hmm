@@ -2,8 +2,6 @@ import numpy as np
 from typing import Iterable, Optional
 
 
-# How should this be structured? As an HMM class? with inference and
-# filtering routines as member functions?
 class HMM:
     def __init__(self, dim_sys: int, dim_obs: int):
         # Initialize the bayesian filter to the initial observation
