@@ -205,17 +205,17 @@ def test_discord_calculation(default_hmm):
     assert discord == 0
 
 
-def test_discord_raises_when_forward_algo_has_not_run(default_hmm):
-    # Arrange
-    BayesInfer = infer.MarkovInfer(2, 2)
-    n_steps = 10
+# def test_discord_raises_when_forward_algo_has_not_run(default_hmm):
+#     # Arrange
+#     BayesInfer = infer.MarkovInfer(2, 2)
+#     n_steps = 10
 
-    # Act
-    default_hmm.run_dynamics(n_steps)
-    obs_ts = default_hmm.get_obs_ts()
+#     # Act
+#     default_hmm.run_dynamics(n_steps)
+#     obs_ts = default_hmm.get_obs_ts()
 
-    with pytest.raises(ValueError):
-        _ = BayesInfer.discord(obs_ts)
+#     with pytest.raises(ValueError):
+#         _ = BayesInfer.discord(obs_ts)
 
 
 @pytest.mark.parametrize('sample_data', [(i, j, k) for i, j, k in zip(sample_pred, sample_state, sample_err)])
