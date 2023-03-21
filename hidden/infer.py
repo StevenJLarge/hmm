@@ -57,6 +57,7 @@ class ExpectationResult:
 
 
 class MaximizationResult:
+
     def __init__(
         self, A_updated: np.ndarray, B_updated: np.ndarray,
         A_prev: np.ndarray, B_prev: np.ndarray
@@ -91,7 +92,7 @@ class MarkovInfer:
     bayes_filter: Iterable
     backward_filter: Iterable
     bayes_smoother: Iterable
-
+ 
     def __init__(self, dim_sys: int, dim_obs: int):
         # Tracker lists for forward and backward estimates
         self.forward_tracker = []
@@ -124,7 +125,7 @@ class MarkovInfer:
             self.predictions_back = []
         else:
             raise ValueError(
-                "Invalid directoon in prediction initializer, must "
+                "Invalid direction in prediction initializer, must "
                 "be `forwards` or `backwards`"
             )
 
@@ -195,6 +196,49 @@ class MarkovInfer:
         # NOTE modification here
         self.backward_tracker = np.flip(self.backward_tracker, axis=0)
 
+    def alpha(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
+        alpha = B[:, obs_ts[0]]
+        self.alpha_tracker = [alpha]
+        for obs in obs_ts[1:]:
+            # update alpha term
+            alpha = (A @ alpha) * B[:, obs]
+            self.alpha_tracker.append(alpha)
+
+    def beta(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
+        beta = np.ones(2)
+        self.beta_tracker = [beta]
+        for obs in obs_ts[-1::-1]:
+            beta = A.T @ (beta * B[:, obs])
+            self.beta_tracker.append(beta)
+        # reverse ordering
+        self.beta_tracker = self.beta_tracker[::-1][1:]
+
+    def likelihood_alpha_beta(self):
+        if self.alpha_tracker is None:
+            raise ValueError(
+                "Must run alpha(...) before calculating liklihood..."
+            )
+
+        if self.beta_tracker is None:
+            raise ValueError(
+                "Must run beta(...) before calculating likelihood..."
+            )
+
+        self.likelihood_tracker_ab = []
+        for a, b in zip(self.alpha_tracker, self.beta_tracker):
+            self.likelihood_tracker_ab.append(np.sum(a * b))
+
+    def bayesian_smooth_alpha_beta(self):
+        if self.beta_tracker is None or self.alpha_tracker is None or self.likelihood_tracker_ab is None:
+            raise ValueError(
+                "Must run alpha(...), beta(...), and "
+                "likelihood_alpha_beta(...) before calcualting smoothed "
+                "estimate..."
+            )
+        self.bayes_alpha_beta = []
+        for a, b, l in zip(self.alpha_tracker, self.beta_tracker, self.likelihood_tracker_ab):
+            self.bayes_alpha_beta.append(a * b / l)
+
     def bayesian_smooth(self, A: np.ndarray):
         # Check to ensure that forward and backward algos have been run before this
         if (len(self.forward_tracker) == 0):
@@ -218,16 +262,10 @@ class MarkovInfer:
             summand = [np.sum(self.bayes_smoother[-(i+1)] * A[:, j] / prediction) for j in range(A.shape[1])]
             self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
 
-    def discord(self, obs: Iterable) -> float:
+    def discord(self, obs: Iterable, filter_est: Iterable) -> float:
         # calculates the discord order parameter, given knowledge of the true
         # underlying states and opbserved sequence
-        if len(self.forward_tracker) != len(obs):
-            raise ValueError(
-                "You must run `forward_algo(...)` before `discord`..."
-            )
-        pred_states = [np.argmax(f) for f in self.forward_tracker]
-
-        error = [1 if f == o else -1 for f, o in zip(pred_states, obs)]
+        error = [1 if f == o else -1 for f, o in zip(filter_est, obs)]
         return 1 - np.mean(error)
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
@@ -400,8 +438,9 @@ class MarkovInfer:
     def expectation(
         self, obs_ts: Iterable, A_est: np.ndarray, B_est: np.ndarray
     ) -> ExpectationResult:
-        self.forward_algo(obs_ts, A_est, B_est)
-        self.backward_algo(obs_ts, A_est, B_est)
+        # Prediction trackers need to be true for likelihood calcualtion
+        self.forward_algo(obs_ts, A_est, B_est, prediction_tracker=True)
+        self.backward_algo(obs_ts, A_est, B_est, prediction_tracker=True)
         self.bayesian_smooth(A_est)
 
         return ExpectationResult(
@@ -410,33 +449,42 @@ class MarkovInfer:
         )
 
     def maximization(
-        self, exp_result: ExpectationResult
+        self, exp_result: ExpectationResult, obs_ts: Iterable
     ) -> MaximizationResult:
         # Calc xi term from expectation result
-        xi = self._calc_xi_term(exp_result)
+        xi = self._calc_xi_term(exp_result, obs_ts)
         # Update matrices
-        return self._update_matrices(exp_result, xi)
+        return self._update_matrices(exp_result, xi, obs_ts)
 
-    def _calc_xi_term(self, exp: ExpectationResult) -> np.ndarray:
+    def _calc_xi_term(
+        self, exp: ExpectationResult, obs_ts: np.ndarray
+    ) -> np.ndarray:
         xi = np.zeros((exp.dim, exp.dim, len(exp.gamma) - 1))
         normalization = np.zeros(xi.shape[2])
         for i in range(exp.dim):
             for j in range(exp.dim):
-                xi[i, j, :] = exp.alpha_k(j)[:-1] * exp.A[i, j] * exp.beta_k(i)[1:] * exp.B[j, j]
+                xi[i, j, :] = exp.alpha_k(j)[:-1] * exp.A[i, j] * exp.beta_k(i)[1:] * exp.B[i, obs_ts[1:]]
                 normalization += xi[i, j, :]
 
         return xi / normalization
 
-    def _update_matrices(self, exp: ExpectationResult, xi: np.ndarray):
+    def _update_matrices(
+        self, exp: ExpectationResult, xi: np.ndarray, obs_ts: Iterable
+    ) -> MaximizationResult:
         A_new = np.zeros_like(exp.A)
         B_new = np.zeros_like(exp.B)
 
         for i in range(exp.dim):
             for j in range(exp.dim):
-                A_new[i, j] = np.sum(xi[i, j, :]) / np.sum(exp.gamma_k(j)[:-1])
-                B_new[i, j] = np.sum(exp.gamma_k(j)[np.array(obs_ts) == i]) / np.sum(exp.gamma_k(j))
+                A_new[i, j] = np.sum(xi[i, j, :]) / np.sum(exp.gamma_k(i)[:-1])
+                B_new[i, j] = np.sum(exp.gamma_k(i)[np.array(obs_ts) == j]) / np.sum(exp.gamma_k(i))
 
-        return MaximizationResult(A_new, B_new, exp.A, exp.B)
+        # normalize results to enforce probability conservation
+        for col in range(A_new.shape[1]):
+            A_new[:, col] = A_new[:, col] / np.sum(A_new[:, col])
+            B_new[:, col] = B_new[:, col] / np.sum(B_new[:, col])
+
+        return MaximizationResult(A_new, B_new, exp.A[:, :], exp.B[:, :])
 
     # ANCHOR READY FOR TESTING
     def baum_welch(
@@ -446,16 +494,20 @@ class MarkovInfer:
         # Iterate through steps of self.expectation, self.maximization
         opt_param = param_init
         A_est, B_est = self._extract_hmm_parameters(opt_param)
-        lkly_tracker = []
+        param_tracker = []
 
-        # TODO Add in tolerance checks based on likelihood
-        for iterations in range(maxiter):
+        # TODO Add in tolerance checks based on parameter updates (we have no measure fo CDLL, right?)
+        for iteration in range(maxiter):
             exp = self.expectation(obs_ts, A_est, B_est)
-            maxim = self.maximization(exp)
+            maxim = self.maximization(exp, obs_ts)
             A_est, B_est = maxim.A, maxim.B
-            lkly_tracker.append(self.calc_likelihood(B_est, obs_ts))
+            param_tracker.append({
+                'iteration': iteration,
+                'A_est': A_est[:, :],
+                'B_est': B_est[:, :]
+            })
 
-        return BaumWelchOptimizationResult(maxim, lkly_tracker, iterations)
+        return BaumWelchOptimizationResult(maxim, param_tracker, iteration)
 
     def _update_hidden_estimate(self, A_est: np.ndarray, trans_rate: float):
         A_est = np.diag([trans_rate] * self.n_sys)
@@ -487,11 +539,14 @@ if __name__ == "__main__":
 
     BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
-    BayesInfer.bayesian_smooth(obs_ts, hmm.A, hmm.B)
+    BayesInfer.bayesian_smooth(hmm.A)
 
-    res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
-    res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
+    BayesInfer.alpha(hmm.A, hmm.B, obs_ts)
+    BayesInfer.beta(hmm.A, hmm.B, obs_ts)
 
-    res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
+    # res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
+    # res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
+
+    # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 
     print("--DONE--")
