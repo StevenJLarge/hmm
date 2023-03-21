@@ -190,32 +190,20 @@ def test_smoothing_on_uninitialized_backward_tracker_raises(test_hmm):
         BayesInfer.bayesian_smooth(test_hmm.A)
 
 
-# def test_discord_calculation(default_hmm):
-#     # Arrange
-#     BayesInfer = infer.MarkovInfer(2, 2)
-#     n_steps = 10
+def test_discord_calculation(default_hmm):
+    # Arrange
+    BayesInfer = infer.MarkovInfer(2, 2)
+    n_steps = 10
 
-#     # Act
-#     default_hmm.run_dynamics(n_steps)
-#     obs_ts = default_hmm.get_obs_ts()
-#     BayesInfer.forward_algo(obs_ts, default_hmm.A, default_hmm.B)
-#     discord = BayesInfer.discord(obs_ts)
+    # Act
+    default_hmm.run_dynamics(n_steps)
+    obs_ts = default_hmm.get_obs_ts()
+    BayesInfer.forward_algo(obs_ts, default_hmm.A, default_hmm.B)
+    prediction = obs_ts
+    discord = BayesInfer.discord(obs_ts, prediction)
 
-#     # Assert
-#     assert discord == 0
-
-
-# def test_discord_raises_when_forward_algo_has_not_run(default_hmm):
-#     # Arrange
-#     BayesInfer = infer.MarkovInfer(2, 2)
-#     n_steps = 10
-
-#     # Act
-#     default_hmm.run_dynamics(n_steps)
-#     obs_ts = default_hmm.get_obs_ts()
-
-#     with pytest.raises(ValueError):
-#         _ = BayesInfer.discord(obs_ts)
+    # Assert
+    assert discord == 0
 
 
 @pytest.mark.parametrize('sample_data', [(i, j, k) for i, j, k in zip(sample_pred, sample_state, sample_err)])
