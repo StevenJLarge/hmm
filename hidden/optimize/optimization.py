@@ -38,7 +38,8 @@ class LikelihoodOptimizer(BaseOptimizer):
             likelihood -= np.log(inner)
         return likelihood
 
-    def _calc_likeihood(
+    # TODO make this into a static method
+    def _calc_likelihood(
         self, param_arr: Iterable, obs_ts: Iterable, *args
     ) -> float:
         # NOTE Currently this only works for a 2D HMM
