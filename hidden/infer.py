@@ -382,7 +382,7 @@ class MarkovInfer:
 
     def _optimize_likelihood_local(
         self, obs_ts: Iterable, param_init: Iterable,
-        method: Optional[str]="SLSQP", mode: Optional[str] = 'global',
+        method: Optional[str]="L-BFGS-B", mode: Optional[str] = 'local',
         **kwargs
     ) -> LikelihoodOptResult:
 
