@@ -40,6 +40,7 @@ class BaseOptimizer(ABC):
 
         return bayes_track, pred_track
 
+    # NOTE Look into this, not sure this is actually working....
     @staticmethod
     @numba.jit(nopython=True)
     def _bayesian_filter(obs: int, A: np.ndarray, B: np.ndarray, bayes_: np.ndarray):
