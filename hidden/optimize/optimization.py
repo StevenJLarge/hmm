@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from operator import mul
 import os
-from typing import Iterable, Tuple, Optional
+from typing import Iterable, Tuple, Optional, Union
 
 import numpy as np
 import numba
@@ -11,6 +11,7 @@ import scipy.optimize as so
 from hidden.infer import MarkovInfer
 from hidden.optimize.results import LocalOptimizationResult, GlobalOptimizationResult
 
+# Dont think I actually need this? Ill just do rwhatever the convention for ravel is...
 _MTX_ENCODING = "ROW_MAJOR"
 
 
@@ -56,26 +57,51 @@ class BaseOptimizer(ABC):
 class LikelihoodOptimizer(BaseOptimizer):
 
     def _encode_parameters(self, A, B):
-        encoded = np.zeros(4 + mul(*A.shape) + mul(*B.shape))
+        encoded = np.zeros(4 + mul(*A.shape) + mul(*B.shape) - A.shape[0] - B.shape[0])
         encoded[: 2] = A.shape
         encoded[2: 4] = B.shape
-        encoded[4: 4 + mul(*A.shape)] = np.ravel(A)
-        encoded[4 + mul(*A.shape):] = np.ravel(B)
+        # Compress the diagonal entries out of A and B
+        A_compressed = np.triu(A, k=1)[:, 1:] + np.tril(A, k=-1)[:, :-1]
+        B_compressed = np.triu(B, k=1)[:, 1:] + np.tril(B, k=-1)[:, :-1]
+        # Encode the off-diagonals into a vector
+        encoded[4: 4 + mul(*A.shape) - A.shape[0]] = np.ravel(A_compressed)
+        encoded[4 + mul(*A.shape) - A.shape[0]:] = np.ravel(B_compressed)
         return encoded
 
     @staticmethod
-    @numba.jit(nopython=True)
-    def _extract_parameters(param_arr: Tuple) -> Tuple[np.ndarray, np.ndarray]:
+    @numba.jit(forceobj=True)
+    def _extract_parameters(param_arr: Union[np.ndarray, Tuple]) -> Tuple[np.ndarray, np.ndarray]:
+        # If this is passed in as a tuple, cast to numpy array
+        # if isinstance(param_arr, Tuple):
+        param_arr = np.array(param_arr)
         # This is not totally true, need to set diagonal elements as sum to
         # preserve cons of prob
-        dimension_config = param_arr[:4]
-        A_size = dimension_config[0] * dimension_config[1]
+        dim_config = param_arr[:4].astype(int)
+        # Take hte dimension to be the 'true' dimension, less the diagonal terms
+        A_size = dim_config[0] * dim_config[1] - dim_config[0]
 
-        trans_mat = param_arr[4:A_size]
+        trans_mat = param_arr[4: 4 + A_size]
         obs_mat = param_arr[4 + A_size:]
 
-        trans_mat = trans_mat.reshape(dimension_config[0], dimension_config[1])
-        obs_mat = obs_mat.reshape(dimension_config[2], dimension_config[3])
+        trans_mat = trans_mat.reshape(dim_config[0], dim_config[1] - 1)
+        obs_mat = obs_mat.reshape(dim_config[2], dim_config[3] - 1)
+
+        # Now reconstruct the trans matrix diagonal elements: first the
+        # following line will add a diagonal of zeros, note this assumes that
+        # the matrix os condensed along axis 1
+        trans_mat = (
+            np.hstack((np.zeros((dim_config[0], 1)), np.triu(trans_mat)))
+            + np.hstack((np.tril(trans_mat, k=-1), np.zeros((dim_config[0], 1))))
+        )
+
+        obs_mat = (
+            np.hstack((np.zeros((dim_config[2], 1)), np.triu(obs_mat)))
+            + np.hstack((np.tril(obs_mat, k=-1), np.zeros((dim_config[2], 1))))
+        )
+        # Add in diagonal terms so that sum(axis=0) = 1
+        trans_mat += np.eye(trans_mat.shape[0], M=trans_mat.shape[1]) - np.diag(trans_mat.sum(axis=0))
+        obs_mat += np.eye(obs_mat.shape[0], M=obs_mat.shape[1]) - np.diag(obs_mat.sum(axis=0))
+
         return trans_mat, obs_mat
 
     @staticmethod
@@ -99,13 +125,16 @@ class LikelihoodOptimizer(BaseOptimizer):
     def _build_optimization_bounds(self, n_params: int, lower_lim: Optional[float] = 1e-3, upper_lim: Optional[float] = 1 - 1e-3) -> Iterable:
         return [(lower_lim, upper_lim)] * n_params
 
+    # Empty method for testing
+    def optimize(self):
+        pass
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
     def __init__(
-        self, analyzer: MarkovInfer, algorithm: Optional[str] = "Nelder-Mead"
+        self, algorithm: Optional[str] = "Nelder-Mead"
     ):
         self.algo = algorithm
-        super().__init__(analyzer)
+        super().__init__()
 
     def optimize(self, obs_ts, A_guess, B_guess) -> LocalOptimizationResult:
         param_init = self._encode_parameters(A_guess, B_guess)
