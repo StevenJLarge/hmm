@@ -29,11 +29,11 @@ B_test_3 = np.array([
 ])
 
 test_2_enc = np.array([
-    2, 2, 2, 2, 0.2, 0.3, 0.0, 0.1
+    0.2, 0.3, 0.0, 0.1
 ])
 
 test_3_enc = np.array([
-    3, 3, 3, 3, 0.1, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1, 0.4, 0.0, 0.3, 0.0, 0.2
+    0.1, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1, 0.4, 0.0, 0.3, 0.0, 0.2
 ])
 
 # test matrix encoding and parameter extraction
@@ -49,11 +49,12 @@ def test_matrix_encoding(A_matrix, B_matrix, compressed):
     opt = optimization.LikelihoodOptimizer()
 
     # Act
-    encoded = opt._encode_parameters(A_matrix, B_matrix)
+    encoded, dim = opt._encode_parameters(A_matrix, B_matrix)
 
     # Assert
     assert all(encoded == compressed)
-
+    assert dim[0] == A_matrix.shape
+    assert dim[1] == B_matrix.shape
 
 # Test matrix decoding as well
 @pytest.mark.parametrize(
@@ -68,7 +69,7 @@ def test_matrix_decoding(A_matrix, B_matrix, compressed):
     opt = optimization.LikelihoodOptimizer()
 
     # Act
-    A_decode, B_decode = opt._extract_parameters(compressed)
+    A_decode, B_decode = opt._extract_parameters(compressed, A_matrix.shape, B_matrix.shape)
 
     # Assert
     assert np.all(np.isclose(A_decode, A_matrix))
