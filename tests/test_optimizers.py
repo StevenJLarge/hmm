@@ -1,6 +1,7 @@
 # Testing suite for inferrence routines
-import numpy as np
+import operator
 import pytest
+import numpy as np
 
 from hidden import infer
 from hidden import dynamics
@@ -35,6 +36,33 @@ test_2_enc = np.array([
 test_3_enc = np.array([
     0.1, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1, 0.4, 0.0, 0.3, 0.0, 0.2
 ])
+
+
+# IO tests
+@pytest.mark.parametrize(['A_matrix', 'B_matrix'],[[A_test_2, B_test_2],[A_test_3, B_test_3]])
+def test_encoding_dimensions(A_matrix, B_matrix):
+    #Arrange
+    opt = optimization.LikelihoodOptimizer()
+
+    # Act
+    _, dim = opt._encode_parameters(A_matrix, B_matrix)
+
+    # Assert
+    assert dim[0] == A_matrix.shape
+    assert dim[1] == B_matrix.shape
+
+
+@pytest.mark.parametrize(['A_matrix', 'B_matrix'],[[A_test_2, B_test_2],[A_test_3, B_test_3]])
+def test_encoded_length(A_matrix, B_matrix):
+    # Arrange
+    opt = optimization.LikelihoodOptimizer()
+
+    # Act
+    encoded, _ = opt._encode_parameters(A_matrix, B_matrix)
+
+    # Assert
+    assert len(encoded) == operator.mul(*A_matrix.shape) + operator.mul(*B_matrix.shape) - A_matrix.shape[1] - B_matrix.shape[1]
+
 
 # test matrix encoding and parameter extraction
 @pytest.mark.parametrize(
