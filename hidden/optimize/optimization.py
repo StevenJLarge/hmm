@@ -52,7 +52,14 @@ class BaseOptimizer(ABC):
 
 class LikelihoodOptimizer(BaseOptimizer):
 
-    def _encode_parameters(self, A: np.ndarray, B: np.ndarray):
+    def _encode_parameters(
+        self, A: np.ndarray, B: np.ndarray, symmetric: Optional[bool] = False
+    ):
+        if symmetric:
+            raise NotImplementedError(
+                'Symmetric model encoding not yet implemented'
+            )
+
         encoded = np.zeros(mul(*A.shape) + mul(*B.shape) - A.shape[0] - B.shape[0])
         dim_tuple = (A.shape, B.shape)
         # Compress the diagonal entries out of A and B
@@ -64,8 +71,6 @@ class LikelihoodOptimizer(BaseOptimizer):
         return encoded, dim_tuple
 
     # @numba.jit(nopython=True)
-    # This cant be numba-optimized, becuase we need to cast the dimensional
-    # parameters to integers to use as indices.
     @staticmethod
     def _extract_parameters(param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple) -> Tuple[np.ndarray, np.ndarray]:
         # If this is passed in as a tuple, cast to numpy array
@@ -129,6 +134,7 @@ class LikelihoodOptimizer(BaseOptimizer):
     def optimize(self):
         pass
 
+
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
     def __init__(
         self, algorithm: Optional[str] = "L-BFGS-B"
@@ -136,10 +142,14 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         self.algo = algorithm
         super().__init__()
 
-    def optimize(self, obs_ts, A_guess, B_guess) -> LikelihoodOptimizationResult:
-        param_init, dim_tuple = self._encode_parameters(A_guess, B_guess)
+    def optimize(
+        self, obs_ts: Iterable, A_guess: np.ndarray, B_guess: np.ndarray,
+        symmetric: Optional[bool] = False
+    ) -> LikelihoodOptimizationResult:
+        param_init, dim_tuple = self._encode_parameters(A_guess, B_guess, symmetric)
         opt_args = (dim_tuple, obs_ts)
         bnds = self._build_optimization_bounds(len(param_init))
+        # _ = LikelihoodOptimizer.calc_likelihood(param_init, *opt_args)
 
         # NOTE There is an error here somewhere...
         self.result = so.minimize(
@@ -155,13 +165,16 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
 
 class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
     def __init__(
-        self, analyzer: MarkovInfer, algorithm: Optional[str] = "sobol"
+        self, algorithm: Optional[str] = "sobol"
     ):
         self.algo = algorithm
-        super().__init__(analyzer)
+        super().__init__()
 
-    def optimize(self, obs_ts: Iterable, n_params: int, dim_tuple: Tuple) -> LikelihoodOptimizationResult:
-        opt_args = (obs_ts,)
+    def optimize(
+        self, obs_ts: Iterable, n_params: int, dim_tuple: Tuple,
+        symmetric: Optional[bool] = False
+    ) -> LikelihoodOptimizationResult:
+        opt_args = (obs_ts, symmetric)
         bnds = self._build_optimization_bounds(n_params)
 
         self.result = so.shgo(
@@ -193,7 +206,7 @@ if __name__ == "__main__":
 
     hmm = dynamics.HMM(2, 2)
     hmm.initialize_dynamics(A, B)
-    hmm.run_dynamics(500)
+    hmm.run_dynamics(1000)
 
     obs_ts = hmm.get_obs_ts()
     A_test = np.array([
@@ -206,8 +219,9 @@ if __name__ == "__main__":
         [0.05, 0.80]
     ])
 
-    opt = LocalLikelihoodOptimizer()
+    opt = LocalLikelihoodOptimizer(algorithm="SLSQP")
 
     res = opt.optimize(obs_ts, A_test, B_test)
 
     print("--DONE--")
+

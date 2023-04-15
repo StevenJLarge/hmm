@@ -544,8 +544,8 @@ if __name__ == "__main__":
     BayesInfer.alpha(hmm.A, hmm.B, obs_ts)
     BayesInfer.beta(hmm.A, hmm.B, obs_ts)
 
-    # res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
-    # res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
+    res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
+    res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
 
     # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 
