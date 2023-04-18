@@ -2,7 +2,8 @@
 from abc import ABC, abstractmethod
 from operator import mul
 import os
-from typing import Iterable, Tuple, Optional, Union
+from typing import Iterable, Tuple, Optional, Union, Iterator
+from itertools import islice
 
 import numpy as np
 import numba
@@ -52,13 +53,32 @@ class BaseOptimizer(ABC):
 
 class LikelihoodOptimizer(BaseOptimizer):
 
-    def _encode_parameters(
-        self, A: np.ndarray, B: np.ndarray, symmetric: Optional[bool] = False
-    ):
-        if symmetric:
-            raise NotImplementedError(
-                'Symmetric model encoding not yet implemented'
+    @staticmethod
+    def _encode_parameters_symmetric(
+        A: np.ndarray, B: np.ndarray
+    ) -> Tuple[np.ndarray, Tuple]:
+        if A.shape[0] != A.shape[1] or B.shape[0] != B.shape[1]:
+            raise ValueError("Input matrix not square...")
+
+        if not np.all(A == A.T) or not np.all(B == B.T):
+            raise ValueError(
+                'Input matrix `A` or `B` is not symmetric...'
             )
+
+        dim_tuple = (A.shape, B.shape)
+        A_entries = (mul(*A.shape) - A.shape[0]) // 2
+        B_entries = (mul(*B.shape) - B.shape[0]) // 2
+        encoded = np.zeros(A_entries + B_entries)
+
+        encoded[:A_entries] = A[np.triu_indices(A.shape[0], k=1)]
+        encoded[A_entries:] = B[np.triu_indices(B.shape[0], k=1)]
+
+        return encoded, dim_tuple
+
+    @staticmethod
+    def _encode_parameters(
+        A: np.ndarray, B: np.ndarray
+    ) -> Tuple[np.ndarray, Tuple]:
 
         encoded = np.zeros(mul(*A.shape) + mul(*B.shape) - A.shape[0] - B.shape[0])
         dim_tuple = (A.shape, B.shape)
@@ -72,16 +92,43 @@ class LikelihoodOptimizer(BaseOptimizer):
 
     # @numba.jit(nopython=True)
     @staticmethod
-    def _extract_parameters(param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple) -> Tuple[np.ndarray, np.ndarray]:
+    def _extract_parameters_symmetric(
+        param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple
+    ) -> Tuple[np.ndarray, np.ndarray]:
+
+        def _build_upper_tri(dim: Tuple, param_iter: Iterator):
+            mat_ = np.zeros(dim)
+            for c in range(dim[0] - 1):
+                mat_[c, c+1:] = list(islice(param_iter, dim[0] - 1 - c))
+            return mat_
+
+        A_size = A_dim[0] * A_dim[1] - A_dim[0]
+        A_size //= 2
+
+        param_iter = iter(param_arr)
+        trans_mat = _build_upper_tri(A_dim, param_iter)
+        obs_mat = _build_upper_tri(B_dim, param_iter)
+
+        trans_mat += trans_mat.T
+        obs_mat += obs_mat.T
+        trans_mat += np.diag(1 - trans_mat.sum(axis=1))
+        obs_mat += np.diag(1 - obs_mat.sum(axis=1))
+        return trans_mat, obs_mat
+
+    # @numba.jit(nopython=True)
+    @staticmethod
+    def _extract_parameters(
+        param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         # If this is passed in as a tuple, cast to numpy array
         # if isinstance(param_arr, Tuple):
         param_arr = np.array(param_arr)
-        # This is not totally true, need to set diagonal elements as sum to
-        # preserve cons of prob
-        # Take hte dimension to be the 'true' dimension, less the diagonal terms
+
+        # Take the dimension to be the 'true' dimension, less the diagonal terms
         A_size = A_dim[0] * A_dim[1] - A_dim[0]
 
-        trans_mat = param_arr[: A_size]
+        # How do I recompose the symmetric matrix?
+        trans_mat = param_arr[:A_size]
         obs_mat = param_arr[A_size:]
 
         trans_mat = trans_mat.reshape(A_dim[0], A_dim[1] - 1)
@@ -114,20 +161,29 @@ class LikelihoodOptimizer(BaseOptimizer):
         # Transpose on predictions will return each column (which is what we
         # # want here)
         for bayes, obs in zip(predictions.T, obs_ts):
-            # Numba tells me that below is faster than using '@'
             inner = bayes @ B[:, obs]
             likelihood -= np.log(inner)
         return likelihood
 
     @staticmethod
     # @numba.jit(nopython=True)
-    def calc_likelihood(param_arr: Iterable, dim: Tuple, obs_ts: Iterable) -> float:
+    def calc_likelihood(
+        param_arr: Iterable, dim: Tuple, obs_ts: Iterable,
+        symmetric: Optional[bool] = False
+    ) -> float:
         A_dim, B_dim = dim
-        A, B = LikelihoodOptimizer._extract_parameters(param_arr, A_dim, B_dim)
+        if symmetric:
+            A, B = LikelihoodOptimizer._extract_parameters_symmetric(param_arr, A_dim, B_dim)
+        else:
+            A, B = LikelihoodOptimizer._extract_parameters(param_arr, A_dim, B_dim)
         _, pred = BaseOptimizer._forward_algo(obs_ts, A, B)
         return LikelihoodOptimizer._likelihood(pred, obs_ts, B)
 
-    def _build_optimization_bounds(self, n_params: int, lower_lim: Optional[float] = 1e-3, upper_lim: Optional[float] = 1 - 1e-3) -> Iterable:
+    @staticmethod
+    def _build_optimization_bounds(
+        n_params: int, lower_lim: Optional[float] = 1e-3,
+        upper_lim: Optional[float] = 1 - 1e-3
+    ) -> Iterable:
         return [(lower_lim, upper_lim)] * n_params
 
     # Empty method for testing
@@ -146,10 +202,14 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         self, obs_ts: Iterable, A_guess: np.ndarray, B_guess: np.ndarray,
         symmetric: Optional[bool] = False
     ) -> LikelihoodOptimizationResult:
-        param_init, dim_tuple = self._encode_parameters(A_guess, B_guess, symmetric)
-        opt_args = (dim_tuple, obs_ts)
+        if symmetric:
+            param_init, dim_tuple = self._encode_parameters_symmetric(A_guess, B_guess)
+        else:
+            param_init, dim_tuple = self._encode_parameters(A_guess, B_guess)
+
+        opt_args = (dim_tuple, obs_ts, symmetric)
         bnds = self._build_optimization_bounds(len(param_init))
-        # _ = LikelihoodOptimizer.calc_likelihood(param_init, *opt_args)
+        _ = LikelihoodOptimizer.calc_likelihood(param_init, *opt_args)
 
         # NOTE There is an error here somewhere...
         self.result = so.minimize(
@@ -160,6 +220,8 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
             bounds=bnds
         )
 
+        if symmetric:
+            return LikelihoodOptimizationResult(self, *self._extract_parameters_symmetric(self.results.x, *dim_tuple))
         return LikelihoodOptimizationResult(self, *self._extract_parameters(self.result.x, *dim_tuple))
 
 
@@ -214,14 +276,25 @@ if __name__ == "__main__":
         [0.25, 0.85]
     ])
 
+    A_test_sym = np.array([
+        [0.8, 0.2],
+        [0.2, 0.8]
+    ])
+
     B_test = np.array([
         [0.95, 0.20],
         [0.05, 0.80]
     ])
 
+    B_test_sym = np.array([
+        [0.95, 0.05],
+        [0.05, 0.95]
+    ])
+
     opt = LocalLikelihoodOptimizer(algorithm="SLSQP")
 
     res = opt.optimize(obs_ts, A_test, B_test)
+    res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
 
     print("--DONE--")
 

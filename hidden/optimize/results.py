@@ -8,7 +8,7 @@ class BaseOptimizationResult(ABC):
         self._success = success
         self._algo_name = algo_name
         self._results = results
-        self.report = None
+        self._report = None
 
     def __repr__(self):
         return f"{self.__name__}(algo={self._algo_name}, success={self.success})"
@@ -23,10 +23,10 @@ class BaseOptimizationResult(ABC):
 
     @property
     def report(self):
-        if self.report is None:
+        if self._report is None:
             return self.package_results()
         else:
-            return self.report
+            return self._report
 
 
 class LikelihoodOptimizationResult(BaseOptimizationResult):
