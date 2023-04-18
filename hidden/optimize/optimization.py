@@ -221,7 +221,7 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         )
 
         if symmetric:
-            return LikelihoodOptimizationResult(self, *self._extract_parameters_symmetric(self.results.x, *dim_tuple))
+            return LikelihoodOptimizationResult(self, *self._extract_parameters_symmetric(self.result.x, *dim_tuple))
         return LikelihoodOptimizationResult(self, *self._extract_parameters(self.result.x, *dim_tuple))
 
 
@@ -254,26 +254,28 @@ class EMOptimizer(BaseOptimizer):
 
 
 if __name__ == "__main__":
-    from hidden import dynamics
-    # testing routines here
+    from hidden import dynamics, infer
+    # testing routines here, lets work with symmetric matrices
     A = np.array([
-        [0.7, 0.2],
-        [0.3, 0.8]
+        [0.7, 0.3],
+        [0.3, 0.7]
     ])
 
     B = np.array([
-        [0.9, 0.15],
-        [0.1, 0.85]
+        [0.9, 0.1],
+        [0.1, 0.9]
     ])
 
     hmm = dynamics.HMM(2, 2)
     hmm.initialize_dynamics(A, B)
     hmm.run_dynamics(1000)
-
     obs_ts = hmm.get_obs_ts()
+
+    analyzer = infer.MarkovInfer(2, 2)
+
     A_test = np.array([
-        [0.75, 0.15],
-        [0.25, 0.85]
+        [0.75, 0.25],
+        [0.25, 0.75]
     ])
 
     A_test_sym = np.array([
@@ -290,6 +292,10 @@ if __name__ == "__main__":
         [0.95, 0.05],
         [0.05, 0.95]
     ])
+
+    param_init_legacy = [0.2, 0.05]
+
+    legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
 
     opt = LocalLikelihoodOptimizer(algorithm="SLSQP")
 
