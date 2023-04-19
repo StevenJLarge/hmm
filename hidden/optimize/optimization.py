@@ -25,7 +25,7 @@ class BaseOptimizer(ABC):
 
     @staticmethod
     # @numba.jit(nopython=True)
-    def _forward_algo(observations, trans_matrix, obs_matrix):
+    def _forward_algo(observations: Iterable, trans_matrix: np.ndarray, obs_matrix: np.ndarray):
         bayes_track = np.zeros((trans_matrix.shape[0], len(observations)))
         pred_track = np.zeros((trans_matrix.shape[0], len(observations)))
         bayes_ = np.ones(trans_matrix.shape[0]) / trans_matrix.shape[0]
@@ -38,11 +38,11 @@ class BaseOptimizer(ABC):
         return bayes_track, pred_track
 
     @staticmethod
-    # @numba.jit(nopython=True)
+    @numba.jit(nopython=True)
     def _bayesian_filter(obs: int, A: np.ndarray, B: np.ndarray, bayes_: np.ndarray):
         bayes_ = A @ bayes_
         pred_ = bayes_.copy()
-        bayes_ = B[:, obs] * bayes_
+        bayes_ = B[obs, :] * bayes_
         bayes_ /= np.sum(bayes_)
         return bayes_, pred_
 
@@ -90,8 +90,8 @@ class LikelihoodOptimizer(BaseOptimizer):
         encoded[mul(*A.shape) - A.shape[0]:] = np.ravel(B_compressed)
         return encoded, dim_tuple
 
-    # @numba.jit(nopython=True)
     @staticmethod
+    # @numba.jit(nopython=True)
     def _extract_parameters_symmetric(
         param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple
     ) -> Tuple[np.ndarray, np.ndarray]:
@@ -115,8 +115,8 @@ class LikelihoodOptimizer(BaseOptimizer):
         obs_mat += np.diag(1 - obs_mat.sum(axis=1))
         return trans_mat, obs_mat
 
-    # @numba.jit(nopython=True)
     @staticmethod
+    # @numba.jit(nopython=True)
     def _extract_parameters(
         param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple,
     ) -> Tuple[np.ndarray, np.ndarray]:
@@ -153,20 +153,22 @@ class LikelihoodOptimizer(BaseOptimizer):
         return trans_mat, obs_mat
 
     @staticmethod
-    # @numba.jit(nopython=True)
+    @numba.jit(nopython=True)
     def _likelihood(
         predictions: np.ndarray, obs_ts: np.ndarray, B: np.ndarray
     ) -> float:
         likelihood = 0
         # Transpose on predictions will return each column (which is what we
-        # # want here)
-        for bayes, obs in zip(predictions.T, obs_ts):
-            inner = bayes @ B[:, obs]
+        # want here) in the loop, and we copy it so that the pred_trans slices
+        # we get in the loop are contiguous in memory (for better numba
+        # performance)
+        pred_T = predictions.T.copy()
+        for i, obs in enumerate(obs_ts):
+            inner = pred_T[i, :] @ B[obs, :]
             likelihood -= np.log(inner)
         return likelihood
 
     @staticmethod
-    # @numba.jit(nopython=True)
     def calc_likelihood(
         param_arr: Iterable, dim: Tuple, obs_ts: Iterable,
         symmetric: Optional[bool] = False
@@ -177,7 +179,7 @@ class LikelihoodOptimizer(BaseOptimizer):
         else:
             A, B = LikelihoodOptimizer._extract_parameters(param_arr, A_dim, B_dim)
         _, pred = BaseOptimizer._forward_algo(obs_ts, A, B)
-        return LikelihoodOptimizer._likelihood(pred, obs_ts, B)
+        return LikelihoodOptimizer._likelihood(pred, np.array(obs_ts), B)
 
     @staticmethod
     def _build_optimization_bounds(
@@ -211,7 +213,6 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         bnds = self._build_optimization_bounds(len(param_init))
         _ = LikelihoodOptimizer.calc_likelihood(param_init, *opt_args)
 
-        # NOTE There is an error here somewhere...
         self.result = so.minimize(
             fun=LikelihoodOptimizer.calc_likelihood,
             x0=param_init,
@@ -254,6 +255,7 @@ class EMOptimizer(BaseOptimizer):
 
 
 if __name__ == "__main__":
+    import time
     from hidden import dynamics, infer
     # testing routines here, lets work with symmetric matrices
     A = np.array([
@@ -268,7 +270,7 @@ if __name__ == "__main__":
 
     hmm = dynamics.HMM(2, 2)
     hmm.initialize_dynamics(A, B)
-    hmm.run_dynamics(1000)
+    hmm.run_dynamics(10000)
     obs_ts = hmm.get_obs_ts()
 
     analyzer = infer.MarkovInfer(2, 2)
@@ -294,13 +296,22 @@ if __name__ == "__main__":
     ])
 
     param_init_legacy = [0.2, 0.05]
-
+    start_leg = time.time()
     legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
-
+    end_leg = time.time()
     opt = LocalLikelihoodOptimizer(algorithm="SLSQP")
 
+    start_new_nonsym = time.time()
     res = opt.optimize(obs_ts, A_test, B_test)
+    end_new_nonsym = time.time()
+
+    start_new_sym = time.time()
     res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
+    end_new_sym = time.time()
+
+    print(f"Time Leg    : {end_leg - start_leg}")
+    print(f"Time NonSym : {end_new_nonsym - start_new_nonsym}")
+    print(f"Time Sym    : {end_new_sym - start_new_sym}")
 
     print("--DONE--")
 
