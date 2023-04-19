@@ -2,10 +2,8 @@
 import operator
 import pytest
 import numpy as np
+from hidden.optimize import base
 
-from hidden import infer
-from hidden import dynamics
-from hidden.optimize import optimization
 
 A_test_2 = np.array([[0.7, 0.2], [0.3, 0.8]])
 A_test_2_sym = np.array([[0.7, 0.3], [0.3, 0.7]])
@@ -63,7 +61,7 @@ test_data_comp_sym = [
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_encoding_dimensions(A_matrix, B_matrix):
     #Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act
     _, dim = opt._encode_parameters(A_matrix, B_matrix)
@@ -76,7 +74,7 @@ def test_encoding_dimensions(A_matrix, B_matrix):
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_encoded_length(A_matrix, B_matrix):
     # Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act
     encoded, _ = opt._encode_parameters(A_matrix, B_matrix)
@@ -95,7 +93,7 @@ def test_encoded_length(A_matrix, B_matrix):
 @pytest.mark.parametrize(['A_matrix', "B_matrix"], test_data_sym)
 def test_encoded_length_symmetric(A_matrix, B_matrix):
     # Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act
     encoded, _ = opt._encode_parameters_symmetric(A_matrix, B_matrix)
@@ -112,7 +110,7 @@ def test_encoded_length_symmetric(A_matrix, B_matrix):
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data_sym)
 def test_non_square_matrix_in_symmetric_encoding_raises(A_matrix, B_matrix):
     # Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act/Assert
     with pytest.raises(ValueError):
@@ -123,7 +121,7 @@ def test_non_square_matrix_in_symmetric_encoding_raises(A_matrix, B_matrix):
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_non_symmetric_matrix_in_symmtric_encoding_raises(A_matrix, B_matrix):
     # Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act/Assert
     with pytest.raises(ValueError):
@@ -134,7 +132,7 @@ def test_non_symmetric_matrix_in_symmtric_encoding_raises(A_matrix, B_matrix):
 @pytest.mark.parametrize(['A_matrix', 'B_matrix', 'compressed'], test_data_comp)
 def test_matrix_encoding(A_matrix, B_matrix, compressed):
     # Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act
     encoded, dim = opt._encode_parameters(A_matrix, B_matrix)
@@ -148,7 +146,7 @@ def test_matrix_encoding(A_matrix, B_matrix, compressed):
 @pytest.mark.parametrize(["A_matrix", "B_matrix", "compressed"], test_data_comp_sym)
 def test_matrix_encoding_symmetric(A_matrix, B_matrix, compressed):
     # Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act
     encoded, dim = opt._encode_parameters_symmetric(A_matrix, B_matrix)
@@ -163,7 +161,7 @@ def test_matrix_encoding_symmetric(A_matrix, B_matrix, compressed):
 @pytest.mark.parametrize(['A_matrix', 'B_matrix', 'compressed'], test_data_comp)
 def test_matrix_decoding(A_matrix, B_matrix, compressed):
     # Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act
     A_decode, B_decode = opt._extract_parameters(compressed, A_matrix.shape, B_matrix.shape)
@@ -176,7 +174,7 @@ def test_matrix_decoding(A_matrix, B_matrix, compressed):
 @pytest.mark.parametrize(['A_matrix', 'B_matrix', 'compressed'], test_data_comp_sym)
 def test_matrix_decoding_symmetric(A_matrix, B_matrix, compressed):
     # Arrange
-    opt = optimization.LikelihoodOptimizer()
+    opt = base.TestLikelihoodOptimizer()
 
     # Act
     A_decode, B_decode = opt._extract_parameters_symmetric(compressed, A_matrix.shape, B_matrix.shape)
