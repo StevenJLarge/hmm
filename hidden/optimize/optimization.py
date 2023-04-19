@@ -1,196 +1,9 @@
-# Routines for running optimizations in likelihood calcualtions
-from abc import ABC, abstractmethod
-from operator import mul
-import os
-from typing import Iterable, Tuple, Optional, Union, Iterator
-from itertools import islice
-
+from typing import Iterable, Tuple, Optional
 import numpy as np
-import numba
 import scipy.optimize as so
 
-from hidden.infer import MarkovInfer
 from hidden.optimize.results import LikelihoodOptimizationResult
-
-
-class BaseOptimizer(ABC):
-    def __init__(self):
-        self.status = 0
-        self.result = None
-        self.bayes_filter = None
-        self.predictions = None
-
-    def __repr__(self):
-        return f"{self.__name__}(status={self.status})"
-
-    @staticmethod
-    # @numba.jit(nopython=True)
-    def _forward_algo(observations: Iterable, trans_matrix: np.ndarray, obs_matrix: np.ndarray):
-        bayes_track = np.zeros((trans_matrix.shape[0], len(observations)))
-        pred_track = np.zeros((trans_matrix.shape[0], len(observations)))
-        bayes_ = np.ones(trans_matrix.shape[0]) / trans_matrix.shape[0]
-
-        for i, obs in enumerate(observations):
-            bayes_, pred_ = BaseOptimizer._bayesian_filter(obs, trans_matrix, obs_matrix, bayes_)
-            bayes_track[:, i] = bayes_
-            pred_track[:, i] = pred_
-
-        return bayes_track, pred_track
-
-    @staticmethod
-    @numba.jit(nopython=True)
-    def _bayesian_filter(obs: int, A: np.ndarray, B: np.ndarray, bayes_: np.ndarray):
-        bayes_ = A @ bayes_
-        pred_ = bayes_.copy()
-        bayes_ = B[obs, :] * bayes_
-        bayes_ /= np.sum(bayes_)
-        return bayes_, pred_
-
-    @abstractmethod
-    def optimize(self):
-        pass
-
-
-class LikelihoodOptimizer(BaseOptimizer):
-
-    @staticmethod
-    def _encode_parameters_symmetric(
-        A: np.ndarray, B: np.ndarray
-    ) -> Tuple[np.ndarray, Tuple]:
-        if A.shape[0] != A.shape[1] or B.shape[0] != B.shape[1]:
-            raise ValueError("Input matrix not square...")
-
-        if not np.all(A == A.T) or not np.all(B == B.T):
-            raise ValueError(
-                'Input matrix `A` or `B` is not symmetric...'
-            )
-
-        dim_tuple = (A.shape, B.shape)
-        A_entries = (mul(*A.shape) - A.shape[0]) // 2
-        B_entries = (mul(*B.shape) - B.shape[0]) // 2
-        encoded = np.zeros(A_entries + B_entries)
-
-        encoded[:A_entries] = A[np.triu_indices(A.shape[0], k=1)]
-        encoded[A_entries:] = B[np.triu_indices(B.shape[0], k=1)]
-
-        return encoded, dim_tuple
-
-    @staticmethod
-    def _encode_parameters(
-        A: np.ndarray, B: np.ndarray
-    ) -> Tuple[np.ndarray, Tuple]:
-
-        encoded = np.zeros(mul(*A.shape) + mul(*B.shape) - A.shape[0] - B.shape[0])
-        dim_tuple = (A.shape, B.shape)
-        # Compress the diagonal entries out of A and B
-        A_compressed = np.triu(A, k=1)[:, 1:] + np.tril(A, k=-1)[:, :-1]
-        B_compressed = np.triu(B, k=1)[:, 1:] + np.tril(B, k=-1)[:, :-1]
-        # Encode the off-diagonals into a vector
-        encoded[: mul(*A.shape) - A.shape[0]] = np.ravel(A_compressed)
-        encoded[mul(*A.shape) - A.shape[0]:] = np.ravel(B_compressed)
-        return encoded, dim_tuple
-
-    @staticmethod
-    # @numba.jit(nopython=True)
-    def _extract_parameters_symmetric(
-        param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple
-    ) -> Tuple[np.ndarray, np.ndarray]:
-
-        def _build_upper_tri(dim: Tuple, param_iter: Iterator):
-            mat_ = np.zeros(dim)
-            for c in range(dim[0] - 1):
-                mat_[c, c+1:] = list(islice(param_iter, dim[0] - 1 - c))
-            return mat_
-
-        A_size = A_dim[0] * A_dim[1] - A_dim[0]
-        A_size //= 2
-
-        param_iter = iter(param_arr)
-        trans_mat = _build_upper_tri(A_dim, param_iter)
-        obs_mat = _build_upper_tri(B_dim, param_iter)
-
-        trans_mat += trans_mat.T
-        obs_mat += obs_mat.T
-        trans_mat += np.diag(1 - trans_mat.sum(axis=1))
-        obs_mat += np.diag(1 - obs_mat.sum(axis=1))
-        return trans_mat, obs_mat
-
-    @staticmethod
-    # @numba.jit(nopython=True)
-    def _extract_parameters(
-        param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        # If this is passed in as a tuple, cast to numpy array
-        # if isinstance(param_arr, Tuple):
-        param_arr = np.array(param_arr)
-
-        # Take the dimension to be the 'true' dimension, less the diagonal terms
-        A_size = A_dim[0] * A_dim[1] - A_dim[0]
-
-        # How do I recompose the symmetric matrix?
-        trans_mat = param_arr[:A_size]
-        obs_mat = param_arr[A_size:]
-
-        trans_mat = trans_mat.reshape(A_dim[0], A_dim[1] - 1)
-        obs_mat = obs_mat.reshape(B_dim[0], B_dim[1] - 1)
-
-        # Now reconstruct the trans matrix diagonal elements: first the
-        # following line will add a diagonal of zeros, note this assumes that
-        # the matrix os condensed along axis 1
-        trans_mat = (
-            np.hstack((np.zeros((A_dim[0], 1)), np.triu(trans_mat)))
-            + np.hstack((np.tril(trans_mat, k=-1), np.zeros((A_dim[0], 1))))
-        )
-
-        obs_mat = (
-            np.hstack((np.zeros((B_dim[0], 1)), np.triu(obs_mat)))
-            + np.hstack((np.tril(obs_mat, k=-1), np.zeros((B_dim[0], 1))))
-        )
-        # Add in diagonal terms so that sum(axis=0) = 1
-        trans_mat += np.eye(trans_mat.shape[0], M=trans_mat.shape[1]) - np.diag(trans_mat.sum(axis=0))
-        obs_mat += np.eye(obs_mat.shape[0], M=obs_mat.shape[1]) - np.diag(obs_mat.sum(axis=0))
-
-        return trans_mat, obs_mat
-
-    @staticmethod
-    @numba.jit(nopython=True)
-    def _likelihood(
-        predictions: np.ndarray, obs_ts: np.ndarray, B: np.ndarray
-    ) -> float:
-        likelihood = 0
-        # Transpose on predictions will return each column (which is what we
-        # want here) in the loop, and we copy it so that the pred_trans slices
-        # we get in the loop are contiguous in memory (for better numba
-        # performance)
-        pred_T = predictions.T.copy()
-        for i, obs in enumerate(obs_ts):
-            inner = pred_T[i, :] @ B[obs, :]
-            likelihood -= np.log(inner)
-        return likelihood
-
-    @staticmethod
-    def calc_likelihood(
-        param_arr: Iterable, dim: Tuple, obs_ts: Iterable,
-        symmetric: Optional[bool] = False
-    ) -> float:
-        A_dim, B_dim = dim
-        if symmetric:
-            A, B = LikelihoodOptimizer._extract_parameters_symmetric(param_arr, A_dim, B_dim)
-        else:
-            A, B = LikelihoodOptimizer._extract_parameters(param_arr, A_dim, B_dim)
-        _, pred = BaseOptimizer._forward_algo(obs_ts, A, B)
-        return LikelihoodOptimizer._likelihood(pred, np.array(obs_ts), B)
-
-    @staticmethod
-    def _build_optimization_bounds(
-        n_params: int, lower_lim: Optional[float] = 1e-3,
-        upper_lim: Optional[float] = 1 - 1e-3
-    ) -> Iterable:
-        return [(lower_lim, upper_lim)] * n_params
-
-    # Empty method for testing
-    def optimize(self):
-        pass
+from hidden.optimize.base import LikelihoodOptimizer
 
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
@@ -211,7 +24,6 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
 
         opt_args = (dim_tuple, obs_ts, symmetric)
         bnds = self._build_optimization_bounds(len(param_init))
-        _ = LikelihoodOptimizer.calc_likelihood(param_init, *opt_args)
 
         self.result = so.minimize(
             fun=LikelihoodOptimizer.calc_likelihood,
@@ -250,8 +62,8 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
         return LikelihoodOptimizationResult(self, *self._extract_parameters(self.result.x, *dim_tuple))
 
 
-class EMOptimizer(BaseOptimizer):
-    pass
+# class EMOptimizer(BaseOptimizer):
+    # pass
 
 
 if __name__ == "__main__":
@@ -302,7 +114,7 @@ if __name__ == "__main__":
     opt = LocalLikelihoodOptimizer(algorithm="SLSQP")
 
     start_new_nonsym = time.time()
-    res = opt.optimize(obs_ts, A_test, B_test)
+    res_nosym = opt.optimize(obs_ts, A_test, B_test)
     end_new_nonsym = time.time()
 
     start_new_sym = time.time()
