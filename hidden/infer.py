@@ -1,10 +1,10 @@
 # File to contain the class definitions and routines for inferring the
 # properties of the HMM
-
-import numpy as np
-import scipy.optimize as so
-from scipy.optimize import OptimizeResult
 from typing import Iterable, Optional, Tuple, Dict
+import numpy as np
+from hidden.optimize.registry import OPTIMIZER_REGISTRY
+from hidden.optimize.base import OptClass
+from hidden.optimize.results import OptimizationResult
 
 
 class MarkovInfer:
@@ -119,7 +119,6 @@ class MarkovInfer:
             self.bayesian_back(obs, trans_matrix, obs_matrix, prediction_tracker)
             self.backward_tracker.append(self.back_filter)
 
-        # NOTE modification here
         self.backward_tracker = np.flip(self.backward_tracker, axis=0)
 
     def alpha(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
@@ -153,7 +152,8 @@ class MarkovInfer:
                 + 'bayesian_smooth'
             )
 
-        # Combine forward and backward algos to calculate bayesian smoother results
+        # Combine forward and backward algos to calculate bayesian smoother
+        # results
         self.bayes_smoother = [[]] * len(self.forward_tracker)
         self.bayes_smoother[-1] = np.array(self.forward_tracker[-1])
 
@@ -163,18 +163,22 @@ class MarkovInfer:
             self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
 
     def discord(self, obs: Iterable, filter_est: Iterable) -> float:
-        # calculates the discord order parameter, given knowledge of the true
-        # underlying states and opbserved sequence
         error = [1 if f == o else -1 for f, o in zip(filter_est, obs)]
         return 1 - np.mean(error)
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
         return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
-    # Optimization routine: now this will compose the optimizer from the
-    # available optimizers in the optimization submodule
-    def optimize(self):
-        pass
+    def optimize(
+        self, obs_ts, A_init, B_init, symmetric: Optional[bool] = False,
+        opt_type: Optional[OptClass] = OptClass.Local
+    ) -> OptimizationResult:
+        if not isinstance(opt_type, OptClass):
+            raise ValueError(
+                'Invalid `opt_class`, must be a member of OptClass enum...'
+            )
+        optimizer = OPTIMIZER_REGISTRY[opt_type]
+        return optimizer.optimize(obs_ts, A_init, B_init, symmetric)
 
 
 if __name__ == "__main__":
@@ -188,6 +192,8 @@ if __name__ == "__main__":
 
     BayesInfer = MarkovInfer(2, 2)
     param_init = (0.15, 0.15)
+    A_init = np.ndarray([[0.85, 0.15], [0.15, 0.85]])
+    B_init = np.ndarray([[0.85, 0.15], [0.15, 0.85]])
 
     BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
@@ -196,8 +202,10 @@ if __name__ == "__main__":
     BayesInfer.alpha(hmm.A, hmm.B, obs_ts)
     BayesInfer.beta(hmm.A, hmm.B, obs_ts)
 
-    res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
-    res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
+    # res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
+    # res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
+    res_loc = BayesInfer.optimize(obs_ts, A_init, B_init, symmetric=True)
+    res_glo = BayesInfer.optimize(obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global)
 
     # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 

@@ -3,7 +3,7 @@ from scipy.optimize import OptimizeResult
 import numpy as np
 
 
-class BaseOptimizationResult(ABC):
+class OptimizationResult(ABC):
     def __init__(self, success: bool, algo_name: str, results: OptimizeResult):
         self._success = success
         self._algo_name = algo_name
@@ -29,7 +29,7 @@ class BaseOptimizationResult(ABC):
             return self._report
 
 
-class LikelihoodOptimizationResult(BaseOptimizationResult):
+class LikelihoodOptimizationResult(OptimizationResult):
     def __init__(self, optimizer: OptimizeResult, A_opt: np.ndarray, B_opt: np.ndarray):        
         super().__init__(optimizer.result.success, optimizer.algo, optimizer.result)
         self.likelihood = optimizer.result.fun
@@ -47,7 +47,7 @@ class LikelihoodOptimizationResult(BaseOptimizationResult):
         return self.report
 
 
-class EMOptimizationResult(BaseOptimizationResult):
+class EMOptimizationResult(OptimizationResult):
     def __init__(self):
         pass
 

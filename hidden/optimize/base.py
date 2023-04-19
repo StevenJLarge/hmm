@@ -1,9 +1,16 @@
 from abc import ABC, abstractmethod
+from enum import Enum, auto
 from typing import Optional, Iterable, Tuple, Union, Iterator
 from operator import mul
 from itertools import islice
 import numpy as np
 import numba
+
+
+class OptClass(Enum):
+    Local: auto()
+    Global: auto()
+    ExpMax: auto()
 
 
 class BaseOptimizer(ABC):
