@@ -359,3 +359,4 @@ class LikelihoodOptimizer(BaseOptimizer):
 class TestLikelihoodOptimizer(LikelihoodOptimizer):
     def optimize(self):
         pass
+
