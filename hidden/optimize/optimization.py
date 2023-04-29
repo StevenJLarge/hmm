@@ -1,4 +1,5 @@
 from typing import Iterable, Tuple, Optional
+from operator import mul
 import numpy as np
 import scipy.optimize as so
 
@@ -60,8 +61,13 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
 
         # Return results
         if symmetric:
-            return LikelihoodOptimizationResult(self, *self._extract_parameters_symmetric(self.result.x, *dim_tuple))
-        return LikelihoodOptimizationResult(self, *self._extract_parameters(self.result.x, *dim_tuple))
+            return LikelihoodOptimizationResult(
+                self,
+                *self._extract_parameters_symmetric(self.result.x, *dim_tuple)
+            )
+        return LikelihoodOptimizationResult(
+            self, *self._extract_parameters(self.result.x, *dim_tuple)
+        )
 
 
 class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
@@ -78,8 +84,31 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
         self.algo = sampling_algorithm
         super().__init__()
 
+    def _get_num_params(self, dim_tuple: Tuple, symmetric: bool) -> int:
+        """Utility function to determine the number fo parameters from the input
+        matrix dimensions.
+
+        Args:
+            dim_tuple (Tuple): Tuple containing the size tupled for A and B
+            symmetric (bool): Whether the problem is assumed ot be symmetric
+
+        Returns:
+            int: total number of parametsr in the problem
+        """
+        N_a = mul(*dim_tuple[0])
+        N_b = mul(*dim_tuple[1])
+
+        N_a = N_a - dim_tuple[0][1]
+        N_b = N_b - dim_tuple[1][1]
+
+        if symmetric:
+            N_a //= 2
+            N_b //= 2
+
+        return N_a + N_b
+
     def optimize(
-        self, obs_ts: Iterable, n_params: int, dim_tuple: Tuple,
+        self, obs_ts: Iterable, dim_tuple: Tuple,
         symmetric: Optional[bool] = False
     ) -> LikelihoodOptimizationResult:
         """Routine to run actual optimization of the model. Passes off the
@@ -97,7 +126,6 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
 
         Args:
             obs_ts (Iterable): Integer sequence of observations
-            n_params (int): number of parameters in the model
             dim_tuple (Tuple): dimensions of A and B matrices
             symmetric (Optional[bool], optional): Whether or not the model
                 parameters are assumed to be symmetric.
@@ -107,17 +135,27 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
             LikelihoodOptimizationResult: Container object for model results
         """
         # Additional arguments
-        opt_args = (obs_ts, symmetric)
+        opt_args = (dim_tuple, obs_ts, symmetric)
+        n_params = self._get_num_params(dim_tuple, symmetric)
         bnds = self._build_optimization_bounds(n_params)
 
         self.result = so.shgo(
-            fun=LikelihoodOptimizer.calc_likelihood,
+            func=LikelihoodOptimizer.calc_likelihood,
             bounds=bnds,
             args=opt_args,
-            sampling_method=self.sampling_algo
+            sampling_method=self.algo
         )
 
-        return LikelihoodOptimizationResult(self, *self._extract_parameters(self.result.x, *dim_tuple))
+        if symmetric:
+            return LikelihoodOptimizationResult(
+                self,
+                *self._extract_parameters_symmetric(self.result.x, *dim_tuple),
+                metadata={"local_min": self.result.xl}
+            )
+        return LikelihoodOptimizationResult(
+            self, *self._extract_parameters(self.result.x, *dim_tuple),
+            metadata={"local_min": self.result.xl}
+        )
 
 
 # class EMOptimizer(BaseOptimizer):
