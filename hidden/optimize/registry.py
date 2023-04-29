@@ -1,5 +1,5 @@
-from optimize.base import OptClass
-from optimize import optimization
+from hidden.optimize.base import OptClass
+from hidden.optimize import optimization
 
 OPTIMIZER_REGISTRY = {
     OptClass.Local: optimization.LocalLikelihoodOptimizer,

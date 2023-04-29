@@ -8,9 +8,9 @@ import numba
 
 
 class OptClass(Enum):
-    Local: auto()
-    Global: auto()
-    ExpMax: auto()
+    Local = auto()
+    Global = auto()
+    ExpMax = auto()
 
 
 class BaseOptimizer(ABC):

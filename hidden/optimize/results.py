@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional, Dict
 from scipy.optimize import OptimizeResult
 import numpy as np
 
@@ -18,11 +19,11 @@ class OptimizationResult(ABC):
         pass
 
     @property
-    def success(self):
+    def success(self) -> bool:
         return self._success
 
     @property
-    def report(self):
+    def report(self) -> Dict:
         if self._report is None:
             return self.package_results()
         else:
@@ -30,21 +31,26 @@ class OptimizationResult(ABC):
 
 
 class LikelihoodOptimizationResult(OptimizationResult):
-    def __init__(self, optimizer: OptimizeResult, A_opt: np.ndarray, B_opt: np.ndarray):        
+    def __init__(
+        self, optimizer: OptimizeResult, A_opt: np.ndarray, B_opt: np.ndarray,
+        metadata: Optional[Dict] = {}
+    ):
         super().__init__(optimizer.result.success, optimizer.algo, optimizer.result)
         self.likelihood = optimizer.result.fun
         self._optimal_params = optimizer.result.x
         self.A = A_opt
         self.B = B_opt
+        self.metadata = metadata
 
-    def package_results(self):
-        self.report = {
+    def package_results(self) -> Dict:
+        self._report = {
             "A_opt": self.A,
             "B_opt": self.B,
             "final_likelihood": self.likelihood,
             "success": self.success,
+            "metadata": self.metadata
         }
-        return self.report
+        return self._report
 
 
 class EMOptimizationResult(OptimizationResult):

@@ -1,6 +1,7 @@
 # File to contain the class definitions and routines for inferring the
 # properties of the HMM
 from typing import Iterable, Optional, Tuple, Dict
+from operator import mul
 import numpy as np
 from hidden.optimize.registry import OPTIMIZER_REGISTRY
 from hidden.optimize.base import OptClass
@@ -152,8 +153,6 @@ class MarkovInfer:
                 + 'bayesian_smooth'
             )
 
-        # Combine forward and backward algos to calculate bayesian smoother
-        # results
         self.bayes_smoother = [[]] * len(self.forward_tracker)
         self.bayes_smoother[-1] = np.array(self.forward_tracker[-1])
 
@@ -170,14 +169,22 @@ class MarkovInfer:
         return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
     def optimize(
-        self, obs_ts, A_init, B_init, symmetric: Optional[bool] = False,
-        opt_type: Optional[OptClass] = OptClass.Local
+        self, obs_ts, A_init: np.ndarray, B_init: np.ndarray,
+        symmetric: Optional[bool] = False,
+        opt_type: Optional[OptClass] = OptClass.Local,
+        algo_opts: Optional[Dict] = {}
     ) -> OptimizationResult:
         if not isinstance(opt_type, OptClass):
             raise ValueError(
                 'Invalid `opt_class`, must be a member of OptClass enum...'
             )
-        optimizer = OPTIMIZER_REGISTRY[opt_type]
+
+        # For the global optimizer, I need n_params, dim_tuple, and
+        optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
+        if (opt_type is OptClass.Global):
+            dim_tuple = (A_init.shape, B_init.shape)
+            return optimizer.optimize(obs_ts, dim_tuple, symmetric=symmetric)
+
         return optimizer.optimize(obs_ts, A_init, B_init, symmetric)
 
 
@@ -192,8 +199,8 @@ if __name__ == "__main__":
 
     BayesInfer = MarkovInfer(2, 2)
     param_init = (0.15, 0.15)
-    A_init = np.ndarray([[0.85, 0.15], [0.15, 0.85]])
-    B_init = np.ndarray([[0.85, 0.15], [0.15, 0.85]])
+    A_init = np.array([[0.85, 0.15], [0.15, 0.85]])
+    B_init = np.array([[0.85, 0.15], [0.15, 0.85]])
 
     BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
@@ -202,11 +209,10 @@ if __name__ == "__main__":
     BayesInfer.alpha(hmm.A, hmm.B, obs_ts)
     BayesInfer.beta(hmm.A, hmm.B, obs_ts)
 
-    # res_loc = BayesInfer.max_likelihood(param_init, obs_ts, mode='local')
-    # res_glo = BayesInfer.max_likelihood(param_init, obs_ts, mode='global')
     res_loc = BayesInfer.optimize(obs_ts, A_init, B_init, symmetric=True)
-    res_glo = BayesInfer.optimize(obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global)
-
+    res_glo = BayesInfer.optimize(
+        obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global
+    )
     # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 
     print("--DONE--")
