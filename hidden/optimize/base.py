@@ -57,6 +57,13 @@ class BaseOptimizer(ABC):
 
         return bayes_track, pred_track
 
+    # Need to add backward algo and bayes smooth here?
+    def _backward_algo(self):
+        pass
+
+    def _bayes_est(self):
+        pass
+
     @staticmethod
     @numba.jit(nopython=True)
     def _bayesian_filter(
@@ -361,6 +368,44 @@ class LikelihoodOptimizer(BaseOptimizer):
         # Return likelihood value
         return LikelihoodOptimizer._likelihood(pred, np.array(obs_ts), B)
 
+
+class CompleteLikelihoodOptimizer(BaseOptimizer):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    # @numba.jit(nopython=True)
+    def calc_alpha(A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
+        alpha_tracker = np.zeros((obs_ts.shape[0], A.shape[0]))
+        alpha = B[:, obs_ts[0]]
+        alpha_tracker[0, :] = alpha
+        for i, obs in enumerate(obs_ts[1:]):
+            alpha = (A @ alpha) * B[:, obs]
+            alpha_tracker[i, :] = alpha
+        return alpha_tracker
+
+    @staticmethod
+    # @numba.jit(nopython=True)
+    def calc_beta(A: np.ndarray, B: np.ndarray, obs_ts):
+        beta_tracker = np.zeros((obs_ts.shape[0], A.shape[0]))
+        beta = np.ones(2)
+        beta_tracker[0, :] += beta
+        for i, obs in enumerate(obs_ts[-1::-1]):
+            beta = A.T @ (beta * B[:, obs])
+            beta_tracker[i, :] = beta
+        return beta_tracker[::-1][1:]
+
+    def update_A_matrix(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
+        alpha = self.calc_alpha(A, B, obs_ts)
+        beta = self.calc_beta(A, B, obs_ts)
+        bayes_est = self._bayes_est()
+
+
+    def update_B_matrix(self):
+        pass
+
+    def optimize(self):
+        pass
 
 # Method for runnnig tests on abstract class TestLikelihoodOptimizer
 class TestLikelihoodOptimizer(LikelihoodOptimizer):

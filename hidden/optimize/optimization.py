@@ -4,7 +4,7 @@ import numpy as np
 import scipy.optimize as so
 
 from hidden.optimize.results import LikelihoodOptimizationResult
-from hidden.optimize.base import LikelihoodOptimizer
+from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
 
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
@@ -158,8 +158,8 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
         )
 
 
-# class EMOptimizer(BaseOptimizer):
-    # pass
+class EMOptimizer(CompleteLikelihoodOptimizer):
+    pass
 
 
 if __name__ == "__main__":
