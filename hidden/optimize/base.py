@@ -395,15 +395,7 @@ class CompleteLikelihoodOptimizer(BaseOptimizer):
             beta_tracker[i, :] = beta
         return beta_tracker[::-1][1:]
 
-    def update_A_matrix(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
-        alpha = self.calc_alpha(A, B, obs_ts)
-        beta = self.calc_beta(A, B, obs_ts)
-        bayes_est = self._bayes_est()
-
-
-    def update_B_matrix(self):
-        pass
-
+    @abstractmethod
     def optimize(self):
         pass
 

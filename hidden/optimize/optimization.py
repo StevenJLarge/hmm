@@ -159,7 +159,19 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
 
 
 class EMOptimizer(CompleteLikelihoodOptimizer):
-    pass
+    def __init__(self):
+        pass
+
+    def _update_A_matrix(self, obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray):
+        alpha = self.calc_alpha(A, B, obs_ts)
+        beta = self.calc_beta(A, B, obs_ts)
+        bayes = self._bayes_est(A, B, obs_ts)
+
+    def _update_B_matrix(self, obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray):
+        bayes = self._bayes_est(A, B, obs_ts)
+
+    def optimize(self):
+        pass
 
 
 if __name__ == "__main__":
