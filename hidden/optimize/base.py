@@ -58,11 +58,47 @@ class BaseOptimizer(ABC):
         return bayes_track, pred_track
 
     # Need to add backward algo and bayes smooth here?
-    def _backward_algo(self):
-        pass
+    def _backward_algo(
+        self, observations: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        back_track = np.zeros((len(observations), trans_matrix.shape[0]))
+        pred_track = np.zeros_like(back_track)
+        _back = np.ones(trans_matrix.shape[0]) / trans_matrix.shape[0]
 
-    def _bayes_est(self):
-        pass
+        for i, obs in enumerate(observations[::-1]):
+            _back_cpy = _back.copy()
+            _back, _pred = BaseOptimizer._backward_filter(
+                obs, trans_matrix, obs_matrix, _back
+            )
+            # this should be the same result?
+            _back_alt, _pred_alt = BaseOptimizer._bayesian_filter(
+                obs, trans_matrix.T, obs_matrix.T, _back_cpy
+            )
+            back_track[i, :] = _back
+            pred_track[i, :] = _pred
+
+        return back_track, pred_track
+
+    def _bayes_est(
+        self, obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray
+    ) -> np.ndarray:
+        fwd_tracker, _ = self._forward_algo(obs_ts, A, B)
+
+        bayes_smooth = np.zeros_like(fwd_tracker)
+        bayes_smooth[-1, :] = fwd_tracker[-1, :]
+
+        # Can get the -(i + 2) and -(i+1) with different slices
+        for i, (filt_m, filt) in enumerate(zip(fwd_tracker[-2::-1, :], fwd_tracker[:-0-1, :])):
+            # filt_m is the -2 term and filt is the -1 term
+            _pred = A.T @ filt_m
+            summand = [np.sum(bayes_smooth[-(i + 1), :] * A[:, j]) / _pred for j in range(A.shape[0])]
+            bayes_smooth[-(i + 2), :] = filt_m * summand
+
+        # for i, filt in enumerate(fwd_tracker[:-1, :]):
+        #     _pred = A.T @ filt[-(i + 2), :]
+        #     summand = [np.sum(bayes_smooth[-(i+1), :] * A[:, j] / _pred for j in range(A.shape[1]))]
+        #     bayes_smooth[-(i + 2), :] = fwd_tracker[-(i + 2), :] * np.array(summand)
+        return bayes_smooth
 
     @staticmethod
     @numba.jit(nopython=True)
@@ -87,6 +123,17 @@ class BaseOptimizer(ABC):
         bayes_ = B[obs, :] * bayes_
         bayes_ /= np.sum(bayes_)
         return bayes_, pred_
+
+    @staticmethod
+    # @numba.jit(nopython=True)
+    def _backward_filter(
+        obs: int, A: np.ndarray, B: np.ndarray, back_: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        back_ = A.T @ back_
+        pred_ = back_.copy()
+        back_ = B[:, obs] * back_
+        back_ /= sum(back_)
+        return back_, pred_
 
     @staticmethod
     def _build_optimization_bounds(

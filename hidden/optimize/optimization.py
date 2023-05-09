@@ -162,16 +162,45 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
     def __init__(self):
         pass
 
-    def _update_A_matrix(self, obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray):
-        alpha = self.calc_alpha(A, B, obs_ts)
-        beta = self.calc_beta(A, B, obs_ts)
-        bayes = self._bayes_est(A, B, obs_ts)
+    @staticmethod
+    def _get_joint_matrix(A: np.ndarray, B: np.ndarray, bayes: np.ndarray):
+        # I think this is a len - 1? Double check how long the bayes estimator is?
+        xi = np.zeros((*A.shape[0], len(bayes) - 1))
 
-    def _update_B_matrix(self, obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray):
-        bayes = self._bayes_est(A, B, obs_ts)
+        alpha = CompleteLikelihoodOptimizer.calc_alpha(A, B, obs_ts)
+        beta = CompleteLikelihoodOptimizer.calc_beta(A, B, obs_ts)
 
-    def optimize(self):
-        pass
+        for i, (_alp, _bet, _p) in enumerate(zip(alpha[:-1], beta[1:], bayes[:-1])):
+            numer_mat = np.outer(_bet, _alp) * A
+            denom_vec = np.repeat(
+                numer_mat.sum(axis=1).reshape(A.shape[0], 1),
+                A.shape[0], axis=1
+            )
+            bayes_mat = np.repeat(
+                _p.reshape(A.shape[0], 1),
+                A.shape[0], axis=1
+            )
+            xi[:, :, i] = (numer_mat / denom_vec) * bayes_mat
+        # Could potentially perform the summation before returning the array here?
+        return xi
+
+    def _update_A_matrix(
+        self, bayes: np.ndarray, A: np.ndarray, B: np.ndarray
+    ) -> np.ndarray:
+        joint_prob = self._get_joint_matrix(A, B, bayes)
+        # Denominator
+        A_new = joint_prob.sum(axis=2)
+        return A_new
+
+    def _update_B_matrix(self, obs_ts: np.ndarray, bayes: np.ndarray):
+        numer_mat = np.zeros((bayes.shape[0], bayes.shape[0], obs_ts.shape))
+        return numer_mat
+
+    def optimize(self, obs_ts, A, B):
+        bayes = self._bayes_est(obs_ts, A, B)
+        A_new = self._update_A_matrix(obs_ts, A, B)
+        B_new = self._update_B_matrix(obs_ts, bayes)
+        return A_new, B_new
 
 
 if __name__ == "__main__":
@@ -217,17 +246,22 @@ if __name__ == "__main__":
 
     param_init_legacy = [0.2, 0.05]
     start_leg = time.time()
-    legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
+    # legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
     end_leg = time.time()
     opt = LocalLikelihoodOptimizer(algorithm="SLSQP")
+    opt_em = EMOptimizer()
 
     start_new_nonsym = time.time()
-    res_nosym = opt.optimize(obs_ts, A_test, B_test)
+    # res_nosym = opt.optimize(obs_ts, A_test, B_test)
     end_new_nonsym = time.time()
 
     start_new_sym = time.time()
-    res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
+    # res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
     end_new_sym = time.time()
+
+    start_new_em = time.time()
+    res_em = opt_em.optimize(obs_ts, A_test, B_test)
+    end_new_em = time.time()
 
     print(f"Time Leg    : {end_leg - start_leg}")
     print(f"Time NonSym : {end_new_nonsym - start_new_nonsym}")
