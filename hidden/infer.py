@@ -59,7 +59,12 @@ class MarkovInfer:
     def _initialize_back_tracker(self):
         # 'initial' value for the back-filter is the final value in the forward
         # filter
-        self.back_filter = self.forward_tracker[-1]
+        # I dont think we can actually initialize this tracker with
+        # the final forward filter value, this is sort of information
+        # leakage, but not really... anyways, it seems most consistent to
+        # initialize it in te same manner as the forward tracker
+        self.back_filter = np.ones(self.n_sys) / self.n_sys
+        # self.back_filter = self.forward_tracker[-1]
         # self.backward_tracker = [self.back_filter]
         self.backward_tracker = []
 

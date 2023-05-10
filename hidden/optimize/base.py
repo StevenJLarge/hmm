@@ -87,19 +87,12 @@ class BaseOptimizer(ABC):
         bayes_smooth = np.zeros_like(fwd_tracker)
         bayes_smooth[-1, :] = fwd_tracker[-1, :]
 
-        # Can get the -(i + 2) and -(i+1) with different slices, this could
-        # potentially be made more clear,a nd we could probably do away with
-        # the comprehension
-        for i, (filt_m, filt) in enumerate(zip(fwd_tracker[-2::-1, :], fwd_tracker[:-0-1, :])):
-            # filt_m is the -2 term and filt is the -1 term
-            _pred = A.T @ filt_m
-            summand = [np.sum(bayes_smooth[-(i + 1), :] * A[:, j]) / _pred for j in range(A.shape[0])]
-            bayes_smooth[-(i + 2), :] = filt_m * summand
+        for i, (filt, _bayes) in enumerate(zip(fwd_tracker[-2::-1, :], bayes_smooth[:0:-1, :])):
+            # filt is the -2 term and _bayes is the -1 term
+            _pred = A.T @ filt
+            summand = [np.sum(_bayes * A[:, j]) / _pred for j in range(A.shape[0])]
+            bayes_smooth[-(i + 2), :] = filt * np.array(summand)
 
-        # for i, filt in enumerate(fwd_tracker[:-1, :]):
-        #     _pred = A.T @ filt[-(i + 2), :]
-        #     summand = [np.sum(bayes_smooth[-(i+1), :] * A[:, j] / _pred for j in range(A.shape[1]))]
-        #     bayes_smooth[-(i + 2), :] = fwd_tracker[-(i + 2), :] * np.array(summand)
         return bayes_smooth
 
     @staticmethod
