@@ -5,6 +5,7 @@ import scipy.optimize as so
 
 from hidden.optimize.results import LikelihoodOptimizationResult
 from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
+from hidden.filters import bayesian
 
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
@@ -39,6 +40,9 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         Returns:
             LikelihoodOptimizationResult: Container object for model results
         """
+        # Cast observations to numpy array if they are a list
+        obs_ts = np.array(obs_ts)
+
         # Encode model parameters into parameter vector
         if symmetric:
             param_init, dim_tuple = self._encode_parameters_symmetric(A_guess, B_guess)
@@ -135,6 +139,7 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
             LikelihoodOptimizationResult: Container object for model results
         """
         # Additional arguments
+        obs_ts = np.array(obs_ts)
         opt_args = (dim_tuple, obs_ts, symmetric)
         n_params = self._get_num_params(dim_tuple, symmetric)
         bnds = self._build_optimization_bounds(n_params)
@@ -165,10 +170,10 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
     @staticmethod
     def _get_joint_matrix(A: np.ndarray, B: np.ndarray, bayes: np.ndarray):
         # I think this is a len - 1? Double check how long the bayes estimator is?
-        xi = np.zeros((*A.shape[0], len(bayes) - 1))
+        xi = np.zeros((A.shape[0], len(bayes) - 1))
 
-        alpha = CompleteLikelihoodOptimizer.calc_alpha(A, B, obs_ts)
-        beta = CompleteLikelihoodOptimizer.calc_beta(A, B, obs_ts)
+        alpha = bayesian.alpha_prob(obs_ts, A, B)
+        beta = bayesian.beta_prob(obs_ts, A, B)
 
         for i, (_alp, _bet, _p) in enumerate(zip(alpha[:-1], beta[1:], bayes[:-1])):
             numer_mat = np.outer(_bet, _alp) * A
@@ -197,7 +202,9 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return numer_mat
 
     def optimize(self, obs_ts, A, B):
-        bayes = self._bayes_est(obs_ts, A, B)
+        obs_ts = np.array(obs_ts)
+
+        bayes = bayesian.bayes_estimate(obs_ts, A, B)
         A_new = self._update_A_matrix(obs_ts, A, B)
         B_new = self._update_B_matrix(obs_ts, bayes)
         return A_new, B_new
@@ -252,11 +259,11 @@ if __name__ == "__main__":
     opt_em = EMOptimizer()
 
     start_new_nonsym = time.time()
-    # res_nosym = opt.optimize(obs_ts, A_test, B_test)
+    res_nosym = opt.optimize(obs_ts, A_test, B_test)
     end_new_nonsym = time.time()
 
     start_new_sym = time.time()
-    # res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
+    res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
     end_new_sym = time.time()
 
     start_new_em = time.time()

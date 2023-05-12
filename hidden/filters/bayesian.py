@@ -22,15 +22,16 @@ def bayes_estimate(
     # This makes the `_trans_matrix` contiguous in memory, which is most
     # efficient for numba, especially '@' apparently...
     _trans_matrix = trans_matrix.T.copy()
-    for i, (filt, _bayes) in enumerate(
-        zip(np.ascontiguousarray(fwd_tracker[-2::-1, :]),
-            np.ascontiguousarray(bayes_smooth[:0:-1, :])
-    )):
-        pred = _trans_matrix @ filt
+    _fwd_cont = np.ascontiguousarray(fwd_tracker[-2::-1, :])
+
+    for i in range(_fwd_cont.shape[0]):
+        _filt = _fwd_cont[i, :]
+        _bayes = bayes_smooth[-(i + 1), :]
+        pred = _trans_matrix @ _filt
         summand = np.array(
             [np.sum(_bayes * trans_matrix[:, j] / pred) for j in range(N)]
         )
-        bayes_smooth[-(i + 2), :] = filt * summand
+        bayes_smooth[-(i + 2), :] = _filt * summand
 
     return bayes_smooth
 
@@ -163,17 +164,17 @@ if __name__ == "__main__":
     analyzer = MarkovInfer(2, 2)
 
     # Current implementations
-    analyzer.forward_algo(obs_ts, hmm.A, hmm.B, prediction_tracker=True)
-    analyzer.backward_algo(obs_ts, hmm.A, hmm.B, prediction_tracker=True)
-    analyzer.bayesian_smooth(hmm.A)
-    analyzer.alpha(hmm.A, hmm.B, obs_ts)
-    analyzer.beta(hmm.A, hmm.B, obs_ts)
+    # analyzer.forward_algo(obs_ts, hmm.A, hmm.B, prediction_tracker=True)
+    # analyzer.backward_algo(obs_ts, hmm.A, hmm.B, prediction_tracker=True)
+    # analyzer.bayesian_smooth(hmm.A)
+    # analyzer.alpha(hmm.A, hmm.B, obs_ts)
+    # analyzer.beta(hmm.A, hmm.B, obs_ts)
 
-    fwd_tracker = analyzer.forward_tracker
-    bck_tracker = analyzer.backward_tracker
-    bayes_tracker = analyzer.bayes_smoother
-    alpha = analyzer.alpha_tracker
-    beta = analyzer.beta_tracker
+    # fwd_tracker = analyzer.forward_tracker
+    # bck_tracker = analyzer.backward_tracker
+    # bayes_tracker = analyzer.bayes_smoother
+    # alpha = analyzer.alpha_tracker
+    # beta = analyzer.beta_tracker
 
     # Filter file implementations
     start_1 = time.time()

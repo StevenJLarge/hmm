@@ -31,19 +31,13 @@ class MarkovInfer:
         self.n_sys = dim_sys
         self.n_obs = dim_obs
 
-    @staticmethod
-    def _cast_observations_to_numpy(observations: Iterable[int]) -> np.ndarray:
-        if not isinstance(observations, np.ndarray):
-            observations = np.array(observations)
-        return observations
-
     def forward_algo(
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
     ):
-        observations = self._cast_observations_to_numpy(observations)
+        observations = np.array(observations)
         # This is now just an interface for the filter/bayesian methods
         self.forward_tracker, self.prediction_tracker = bayesian.forward_algo(
             observations, trans_matrix, obs_matrix
@@ -55,7 +49,7 @@ class MarkovInfer:
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
     ):
-        observations = self._cast_observations_to_numpy(observations)
+        observations = np.array(observations)
         self.backward_tracker, self.predictions_back = bayesian.backward_algo(
             observations, trans_matrix, obs_matrix
         )
@@ -64,7 +58,7 @@ class MarkovInfer:
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
     ):
-        observations = self._cast_observations_to_numpy(observations)
+        observations = np.array(observations)
         self.alpha_tracker = bayesian.alpha_prob(
             observations, trans_matrix, obs_matrix
         )
@@ -73,7 +67,7 @@ class MarkovInfer:
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
     ):
-        observations = self._cast_observations_to_numpy(observations)
+        observations = np.array(observations)
         self.beta_tracker = bayesian.beta_prob(
             observations, trans_matrix, obs_matrix
         )
@@ -82,7 +76,7 @@ class MarkovInfer:
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
     ):
-        observations = self._cast_observations_to_numpy(observations)
+        observations = np.array(observations)
         self.bayes_smooth = bayesian.bayes_estimate(
             observations, trans_matrix, obs_matrix
         )
@@ -104,7 +98,7 @@ class MarkovInfer:
             raise ValueError(
                 'Invalid `opt_class`, must be a member of OptClass enum...'
             )
-        observations = self._cast_observations_to_numpy(observations)
+        observations = np.array(observations)
         # For the global optimizer, I need n_params, dim_tuple, and
         optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
         if (opt_type is OptClass.Global):
