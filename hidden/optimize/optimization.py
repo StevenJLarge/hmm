@@ -168,9 +168,9 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         pass
 
     @staticmethod
-    def _get_joint_matrix(A: np.ndarray, B: np.ndarray, bayes: np.ndarray):
+    def _get_joint_matrix(obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray, bayes: np.ndarray):
         # I think this is a len - 1? Double check how long the bayes estimator is?
-        xi = np.zeros((A.shape[0], len(bayes) - 1))
+        xi = np.zeros((*A.shape, len(bayes) - 1))
 
         alpha = bayesian.alpha_prob(obs_ts, A, B)
         beta = bayesian.beta_prob(obs_ts, A, B)
@@ -190,9 +190,9 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return xi
 
     def _update_A_matrix(
-        self, bayes: np.ndarray, A: np.ndarray, B: np.ndarray
+        self, obs_ts: Iterable, A: np.ndarray, B: np.ndarray, bayes: np.ndarray
     ) -> np.ndarray:
-        joint_prob = self._get_joint_matrix(A, B, bayes)
+        joint_prob = self._get_joint_matrix(obs_ts, A, B, bayes)
         # Denominator
         A_new = joint_prob.sum(axis=2)
         return A_new
@@ -205,7 +205,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         obs_ts = np.array(obs_ts)
 
         bayes = bayesian.bayes_estimate(obs_ts, A, B)
-        A_new = self._update_A_matrix(obs_ts, A, B)
+        A_new = self._update_A_matrix(obs_ts, A, B, bayes)
         B_new = self._update_B_matrix(obs_ts, bayes)
         return A_new, B_new
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
 
     hmm = dynamics.HMM(2, 2)
     hmm.initialize_dynamics(A, B)
-    hmm.run_dynamics(10000)
+    hmm.run_dynamics(500)
     obs_ts = hmm.get_obs_ts()
 
     analyzer = infer.MarkovInfer(2, 2)
@@ -259,11 +259,11 @@ if __name__ == "__main__":
     opt_em = EMOptimizer()
 
     start_new_nonsym = time.time()
-    res_nosym = opt.optimize(obs_ts, A_test, B_test)
+    # res_nosym = opt.optimize(obs_ts, A_test, B_test)
     end_new_nonsym = time.time()
 
     start_new_sym = time.time()
-    res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
+    # res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
     end_new_sym = time.time()
 
     start_new_em = time.time()
