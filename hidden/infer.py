@@ -6,6 +6,7 @@ import numpy as np
 from hidden.optimize.registry import OPTIMIZER_REGISTRY
 from hidden.optimize.base import OptClass
 from hidden.optimize.results import OptimizationResult
+from hidden.filters import bayesian
 
 
 class MarkovInfer:
@@ -22,149 +23,69 @@ class MarkovInfer:
  
     def __init__(self, dim_sys: int, dim_obs: int):
         # Tracker lists for forward and backward estimates
-        self.forward_tracker = []
-        self.backward_tracker = []
-        self.predictions = []
+        self.forward_tracker = None
+        self.backward_tracker = None
+        self.predictions = None
 
         # Dimension of target system and observation vector
         self.n_sys = dim_sys
         self.n_obs = dim_obs
 
-        # Default initialization values for bayes filer, backward filter, and
-        # bayes smoother instance variables
-        self.bayes_filter = None
-        self.backward_filter = None
-        self.bayes_smoother = None
-
-    def _initialize_bayes_tracker(self):
-        # Initialize a naive bayes filter and initialize the forward_tracker
-        # list with it
-        # NOTE is this the best initial condition? Its more an agnostic prior
-        # rather than a naive prior...
-        self.bayes_filter = np.ones(self.n_sys) / self.n_sys
-        self.forward_tracker = []
-        self.backward_tracker = []
-
-    def _initialize_pred_tracker(self, mode: Optional[str] = "forwards"):
-        if mode == "forwards":
-            self.predictions = []
-        elif mode == "backwards":
-            self.predictions_back = []
-        else:
-            raise ValueError(
-                "Invalid direction in prediction initializer, must "
-                "be `forwards` or `backwards`"
-            )
-
-    def _initialize_back_tracker(self):
-        # 'initial' value for the back-filter is the final value in the forward
-        # filter
-        # I dont think we can actually initialize this tracker with
-        # the final forward filter value, this is sort of information
-        # leakage, but not really... anyways, it seems most consistent to
-        # initialize it in te same manner as the forward tracker
-        self.back_filter = np.ones(self.n_sys) / self.n_sys
-        # self.back_filter = self.forward_tracker[-1]
-        # self.backward_tracker = [self.back_filter]
-        self.backward_tracker = []
-
-    def bayesian_filter(
-        self, obs: int, A: np.ndarray, B: np.ndarray,
-        prediction_tracker: bool
-    ):
-        # Two-step bayesian filter equations, updates the current bayes_filter
-        self.bayes_filter = np.matmul(A, self.bayes_filter)
-        if prediction_tracker:
-            self.predictions.append(self.bayes_filter)
-        self.bayes_filter = B[:, obs] * self.bayes_filter
-        self.bayes_filter /= np.sum(self.bayes_filter)
-
-    def bayesian_back(
-        self, obs: int, A: np.ndarray, B: np.ndarray,
-        prediction_tracker: bool
-    ):
-        # Two-step update for back-propagated bayesian filter
-        self.back_filter = np.matmul(A.T, self.back_filter)
-        if prediction_tracker:
-            self.predictions_back.append(self.back_filter)
-        self.back_filter = B[:, obs] * self.back_filter
-        self.back_filter /= np.sum(self.back_filter)
+    @staticmethod
+    def _cast_observations_to_numpy(observations: Iterable[int]) -> np.ndarray:
+        if not isinstance(observations, np.ndarray):
+            observations = np.array(observations)
+        return observations
 
     def forward_algo(
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
-        prediction_tracker: Optional[bool] = False
     ):
-        # Runs the fwd algo over an entire sequence
-        self._initialize_bayes_tracker()
-
-        if prediction_tracker:
-            self._initialize_pred_tracker()
-
-        for obs in observations:
-            self.bayesian_filter(obs, trans_matrix, obs_matrix, prediction_tracker)
-            self.forward_tracker.append(self.bayes_filter)
+        observations = self._cast_observations_to_numpy(observations)
+        # This is now just an interface for the filter/bayesian methods
+        self.forward_tracker, self.prediction_tracker = bayesian.forward_algo(
+            observations, trans_matrix, obs_matrix
+        )
 
     def backward_algo(
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
-        prediction_tracker: Optional[bool] = False
     ):
-        if len(self.forward_tracker) != len(observations):
-            self.forward_algo(observations, trans_matrix, obs_matrix)
-        self._initialize_back_tracker()
+        observations = self._cast_observations_to_numpy(observations)
+        self.backward_tracker, self.predictions_back = bayesian.backward_algo(
+            observations, trans_matrix, obs_matrix
+        )
 
-        if prediction_tracker:
-            self._initialize_pred_tracker(mode="backwards")
+    def alpha(
+        self, observations: np.ndarray, trans_matrix: np.ndarray,
+        obs_matrix: np.ndarray
+    ):
+        observations = self._cast_observations_to_numpy(observations)
+        self.alpha_tracker = bayesian.alpha_prob(
+            observations, trans_matrix, obs_matrix
+        )
 
-        for obs in np.flip(observations):
-            self.bayesian_back(obs, trans_matrix, obs_matrix, prediction_tracker)
-            self.backward_tracker.append(self.back_filter)
+    def beta(
+        self, observations: np.ndarray, trans_matrix: np.ndarray,
+        obs_matrix: np.ndarray
+    ):
+        observations = self._cast_observations_to_numpy(observations)
+        self.beta_tracker = bayesian.beta_prob(
+            observations, trans_matrix, obs_matrix
+        )
 
-        self.backward_tracker = np.flip(self.backward_tracker, axis=0)
-
-    def alpha(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
-        alpha = B[:, obs_ts[0]]
-        self.alpha_tracker = [alpha]
-        for obs in obs_ts[1:]:
-            # update alpha term
-            alpha = (A @ alpha) * B[:, obs]
-            self.alpha_tracker.append(alpha)
-
-    def beta(self, A: np.ndarray, B: np.ndarray, obs_ts: np.ndarray):
-        beta = np.ones(2)
-        self.beta_tracker = [beta]
-        for obs in obs_ts[-1::-1]:
-            beta = A.T @ (beta * B[:, obs])
-            self.beta_tracker.append(beta)
-        # reverse ordering
-        self.beta_tracker = self.beta_tracker[::-1][1:]
-
-    def bayesian_smooth(self, A: np.ndarray):
-        # Check to ensure that forward and backward algos have been run before this
-        if (len(self.forward_tracker) == 0):
-            raise ValueError(
-                'forward_tracker is empty, you must run forward_algo before '
-                + 'bayesian_smooth'
-            )
-
-        if (len(self.backward_tracker) == 0):
-            raise ValueError(
-                'backward_tracker is empty, you must run backward_algo before '
-                + 'bayesian_smooth'
-            )
-
-        self.bayes_smoother = [[]] * len(self.forward_tracker)
-        self.bayes_smoother[-1] = np.array(self.forward_tracker[-1])
-
-        for i in range(len(self.forward_tracker) - 1):
-            prediction = np.matmul(A.T, self.forward_tracker[-(i + 2)])
-            summand = [np.sum(self.bayes_smoother[-(i+1)] * A[:, j] / prediction) for j in range(A.shape[1])]
-            self.bayes_smoother[-(i + 2)] = self.forward_tracker[-(i + 2)] * np.array(summand)
+    def bayesian_smooth(
+        self, observations: np.ndarray, trans_matrix: np.ndarray,
+        obs_matrix: np.ndarray
+    ):
+        observations = self._cast_observations_to_numpy(observations)
+        self.bayes_smooth = bayesian.bayes_estimate(
+            observations, trans_matrix, obs_matrix
+        )
 
     def discord(self, obs: Iterable, filter_est: Iterable) -> float:
         error = [1 if f == o else -1 for f, o in zip(filter_est, obs)]
@@ -174,7 +95,7 @@ class MarkovInfer:
         return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
     def optimize(
-        self, obs_ts, A_init: np.ndarray, B_init: np.ndarray,
+        self, observations, trans_init: np.ndarray, obs_init: np.ndarray,
         symmetric: Optional[bool] = False,
         opt_type: Optional[OptClass] = OptClass.Local,
         algo_opts: Optional[Dict] = {}
@@ -183,14 +104,14 @@ class MarkovInfer:
             raise ValueError(
                 'Invalid `opt_class`, must be a member of OptClass enum...'
             )
-
+        observations = self._cast_observations_to_numpy(observations)
         # For the global optimizer, I need n_params, dim_tuple, and
         optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
         if (opt_type is OptClass.Global):
-            dim_tuple = (A_init.shape, B_init.shape)
-            return optimizer.optimize(obs_ts, dim_tuple, symmetric=symmetric)
+            dim_tuple = (trans_init.shape, obs_init.shape)
+            return optimizer.optimize(observations, dim_tuple, symmetric=symmetric)
 
-        return optimizer.optimize(obs_ts, A_init, B_init, symmetric)
+        return optimizer.optimize(observations, trans_init, obs_init, symmetric)
 
 
 if __name__ == "__main__":
