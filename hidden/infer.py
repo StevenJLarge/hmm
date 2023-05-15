@@ -14,18 +14,22 @@ class MarkovInfer:
     forward_tracker: Iterable
     backward_tracker: Iterable
     predictions: Iterable
+    predictions_back: Iterable
+    bayes_smooth: Iterable
+    alpha_tracker: Iterable
+    beta_tracker: Iterable
     n_sys: int
     n_obs: int
-
-    bayes_filter: Iterable
-    backward_filter: Iterable
-    bayes_smoother: Iterable
  
     def __init__(self, dim_sys: int, dim_obs: int):
         # Tracker lists for forward and backward estimates
         self.forward_tracker = None
         self.backward_tracker = None
         self.predictions = None
+        self.predictions_back = None
+        self.bayes_smooth = None
+        self.alpha_tracker = None
+        self.beta_tracker = None
 
         # Dimension of target system and observation vector
         self.n_sys = dim_sys
@@ -81,8 +85,8 @@ class MarkovInfer:
             observations, trans_matrix, obs_matrix
         )
 
-    def discord(self, obs: Iterable, filter_est: Iterable) -> float:
-        error = [1 if f == o else -1 for f, o in zip(filter_est, obs)]
+    def discord(self, state: Iterable, filter_est: Iterable) -> float:
+        error = [1 if f == o else -1 for f, o in zip(filter_est, state)]
         return 1 - np.mean(error)
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:

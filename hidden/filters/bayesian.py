@@ -17,7 +17,7 @@ def bayes_estimate(
     # For this we dont make use of the predictions
     fwd_tracker, _ = forward_algo(obs_ts, trans_matrix, obs_matrix)
     N = trans_matrix.shape[0]
-    bayes_smooth = np.zeros_like(fwd_tracker)
+    bayes_smooth = np.zeros((len(obs_ts), trans_matrix.shape[0]), dtype=float)
     bayes_smooth[-1, :] = fwd_tracker[-1, :]
     # This makes the `_trans_matrix` contiguous in memory, which is most
     # efficient for numba, especially '@' apparently...
