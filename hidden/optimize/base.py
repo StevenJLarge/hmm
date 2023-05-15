@@ -12,7 +12,7 @@ from hidden.filters import bayesian
 class OptClass(Enum):
     Local = auto()
     Global = auto()
-    ExpMax = auto()
+    # ExpMax = auto()
 
 
 class BaseOptimizer(ABC):

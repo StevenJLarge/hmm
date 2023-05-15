@@ -1,9 +1,13 @@
 # Testing suite for inferrence routines
 import numpy as np
 import pytest
+import itertools
 
 from hidden import infer
 from hidden import dynamics
+from hidden.optimize.base import OptClass
+from hidden.optimize.results import OptimizationResult
+
 
 # Global configureations
 A_test = np.array([
@@ -28,6 +32,9 @@ sample_state = [
 
 sample_err = [1, 0, 0.5]
 sample_disc = [2, 0, 1]
+
+sym_test = [True, False]
+opt_type_test = OptClass._member_names_
 
 
 @pytest.fixture
@@ -108,6 +115,34 @@ def test_smoothing_algorithm_tracking(test_hmm):
     assert len(BayesInfer.bayes_smooth) == len(obs_ts)
 
 
+def test_alpha_algorithm_tracking(test_hmm):
+    # Arrange
+    n_steps = 10
+    BayesInfer = infer.MarkovInfer(2, 2)
+
+    # Act
+    test_hmm.run_dynamics(n_steps)
+    obs_ts = test_hmm.get_obs_ts()
+    BayesInfer.alpha(obs_ts, test_hmm.A, test_hmm.B)
+
+    # Assert
+    assert len(BayesInfer.alpha_tracker) == len(obs_ts)
+
+
+def test_beta_algorithm_tracking(test_hmm):
+    # Arrange
+    n_steps = 10
+    BayesInfer = infer.MarkovInfer(2, 2)
+
+    # Act
+    test_hmm.run_dynamics(n_steps)
+    obs_ts = test_hmm.get_obs_ts()
+    BayesInfer.beta(obs_ts, test_hmm.A, test_hmm.B)
+
+    # Assert
+    assert len(BayesInfer.beta_tracker) == len(obs_ts)
+
+
 @pytest.mark.parametrize(
     'sample_data',
     [(i, j, k) for i, j, k in zip(sample_pred, sample_state, sample_disc)]
@@ -145,6 +180,35 @@ def test_error_rate_calculation(sample_data):
 
 
 # Optimizations
+def check_optimizer_raises_for_invalid_class(test_hmm):
+    # Arrange
+    BayesInfer = infer.MarkovInfer(2, 2)
+    sample_obs = np.zeros(10)
+
+    # Act / Assert
+    with pytest.raises(ValueError):
+        BayesInfer.optimize(
+            sample_obs, test_hmm.A, test_hmm.B, obs_type="INVALID"
+        )
+
+
+@pytest.mark.parametrize(
+    ['sym', 'opt_type'], [itertools.product(sym_test, opt_type_test)]
+)
+def check_optimizer_runs_with_correct_return_type_for_valid_input(test_hmm, sym, opt_type):
+    # Arrange
+    n_steps = 100
+    BayesInfer = infer.MarkovInfer(2, 2)
+
+    # Act
+    test_hmm.run_dynamics(n_steps)
+    obs_ts = test_hmm.get_obs_ts()
+    opt_res = BayesInfer.optimize(
+        obs_ts, test_hmm.A, test_hmm.B, symmetric=sym, opt_type=opt_type
+    )
+
+    # Assert
+    assert isinstance(opt_res, OptimizationResult)
 
 
 if __name__ == "__main__":
