@@ -6,11 +6,13 @@ from itertools import islice
 import numpy as np
 import numba
 
+from hidden.filters import bayesian
+
 
 class OptClass(Enum):
     Local = auto()
     Global = auto()
-    ExpMax = auto()
+    # ExpMax = auto()
 
 
 class BaseOptimizer(ABC):
@@ -20,66 +22,8 @@ class BaseOptimizer(ABC):
         self.bayes_filter = None
         self.predictions = None
 
-    def __repr__(self):
-        return f"{self.__name__}(status={self.status})"
-
-    @staticmethod
-    def _forward_algo(
-        observations: Iterable, trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Runs the forward bayesian filter calculations on an input set of
-        bservations (`observations`) based on input transition (`trans_matrix`)
-        and observation (`obs_matrix`) matrices.
-
-        Args:
-            observations (Iterable): Integer sequence of observed states
-            trans_matrix (np.ndarray): Matrix of transition probabilities
-            obs_matrix (np.ndarray): Matrix of observation probabilities
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: Bayesian filtered state estimates,
-                Bayesian state predictions (middle-state of recursive Bayesian
-                update equations)
-        """
-        # initialize trackers so that single-observation slices will be
-        # contiguous in memory
-        bayes_track = np.zeros((len(observations), trans_matrix.shape[0]))
-        pred_track = np.zeros((len(observations), trans_matrix.shape[0]))
-        bayes_ = np.ones(trans_matrix.shape[0]) / trans_matrix.shape[0]
-
-        for i, obs in enumerate(observations):
-            bayes_, pred_ = BaseOptimizer._bayesian_filter(
-                obs, trans_matrix, obs_matrix, bayes_
-            )
-            bayes_track[i, :] = bayes_
-            pred_track[i, :] = pred_
-
-        return bayes_track, pred_track
-
-    @staticmethod
-    @numba.jit(nopython=True)
-    def _bayesian_filter(
-        obs: int, A: np.ndarray, B: np.ndarray, bayes_: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Implementation of single-step of the Bayesian filter equations, used
-        to prtoduce a recursive/running estimate of the hidden state
-        probability, conditioned on the entire previous history of observations
-
-        Args:
-            obs (int): observation at time t
-            A (np.ndarray): transition probability matrix
-            B (np.ndarray): observation probability matrix
-            bayes_ (np.ndarray): Bayesian filtered estimate
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: bayesian filter estimate, prediction
-        """
-        bayes_ = A @ bayes_
-        pred_ = bayes_.copy()
-        bayes_ = B[obs, :] * bayes_
-        bayes_ /= np.sum(bayes_)
-        return bayes_, pred_
+    # def __repr__(self):
+    #     return f"{self.name}(status={self.status})"
 
     @staticmethod
     def _build_optimization_bounds(
@@ -357,12 +301,21 @@ class LikelihoodOptimizer(BaseOptimizer):
         else:
             A, B = LikelihoodOptimizer._extract_parameters(param_arr, A_dim, B_dim)
         # Generate predictions vector
-        _, pred = BaseOptimizer._forward_algo(obs_ts, A, B)
+        _, pred = bayesian.forward_algo(obs_ts, A, B)
         # Return likelihood value
         return LikelihoodOptimizer._likelihood(pred, np.array(obs_ts), B)
 
 
-# Method for runnnig tests on abstract class TestLikelihoodOptimizer
+class CompleteLikelihoodOptimizer(BaseOptimizer):
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def optimize(self):
+        pass
+
+
+# Method for runnning tests on abstract class TestLikelihoodOptimizer
 class TestLikelihoodOptimizer(LikelihoodOptimizer):
     def optimize(self):
         pass
