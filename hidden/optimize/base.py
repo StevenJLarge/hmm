@@ -22,8 +22,8 @@ class BaseOptimizer(ABC):
         self.bayes_filter = None
         self.predictions = None
 
-    def __repr__(self):
-        return f"{self.__name__}(status={self.status})"
+    # def __repr__(self):
+    #     return f"{self.name}(status={self.status})"
 
     @staticmethod
     def _build_optimization_bounds(

@@ -11,8 +11,8 @@ class OptimizationResult(ABC):
         self._results = results
         self._report = None
 
-    def __repr__(self):
-        return f"{self.__name__}(algo={self._algo_name}, success={self.success})"
+    # def __repr__(self):
+    #     return f"{self.__name__}(algo={self._algo_name}, success={self.success})"
 
     @abstractmethod
     def package_results(self):
