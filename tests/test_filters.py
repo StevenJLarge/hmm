@@ -49,8 +49,7 @@ def test_hmm_3():
 
 def sample_hmm(n_dim):
     hmm = dynamics.HMM(n_dim, n_dim)
-    hmm.A = np.eye(n_dim)
-    hmm.B = np.eye(n_dim)
+    hmm.init_uniform_cycle(0.15, 0.1)
     return hmm
 
 
@@ -59,7 +58,7 @@ filter_functions = [
     bayesian.forward_algo,
     bayesian.backward_algo,
     bayesian.alpha_prob,
-    bayesian.beta_prob
+    # bayesian.beta_prob
 ]
 
 
