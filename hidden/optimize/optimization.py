@@ -4,7 +4,8 @@ import numpy as np
 import scipy.optimize as so
 
 from hidden.optimize.results import LikelihoodOptimizationResult
-from hidden.optimize.base import LikelihoodOptimizer
+from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
+from hidden.filters import bayesian
 
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
@@ -39,6 +40,9 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         Returns:
             LikelihoodOptimizationResult: Container object for model results
         """
+        # Cast observations to numpy array if they are a list
+        obs_ts = np.array(obs_ts)
+
         # Encode model parameters into parameter vector
         if symmetric:
             param_init, dim_tuple = self._encode_parameters_symmetric(A_guess, B_guess)
@@ -135,6 +139,7 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
             LikelihoodOptimizationResult: Container object for model results
         """
         # Additional arguments
+        obs_ts = np.array(obs_ts)
         opt_args = (dim_tuple, obs_ts, symmetric)
         n_params = self._get_num_params(dim_tuple, symmetric)
         bnds = self._build_optimization_bounds(n_params)
@@ -158,8 +163,51 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
         )
 
 
-# class EMOptimizer(BaseOptimizer):
-    # pass
+class EMOptimizer(CompleteLikelihoodOptimizer):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def _get_joint_matrix(obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray, bayes: np.ndarray):
+        # I think this is a len - 1? Double check how long the bayes estimator is?
+        xi = np.zeros((*A.shape, len(bayes) - 1))
+
+        alpha = bayesian.alpha_prob(obs_ts, A, B)
+        beta = bayesian.beta_prob(obs_ts, A, B)
+
+        for i, (_alp, _bet, _p) in enumerate(zip(alpha[:-1], beta[1:], bayes[:-1])):
+            numer_mat = np.outer(_bet, _alp) * A
+            denom_vec = np.repeat(
+                numer_mat.sum(axis=1).reshape(A.shape[0], 1),
+                A.shape[0], axis=1
+            )
+            bayes_mat = np.repeat(
+                _p.reshape(A.shape[0], 1),
+                A.shape[0], axis=1
+            )
+            xi[:, :, i] = (numer_mat / denom_vec) * bayes_mat
+        # Could potentially perform the summation before returning the array here?
+        return xi
+
+    def _update_A_matrix(
+        self, obs_ts: Iterable, A: np.ndarray, B: np.ndarray, bayes: np.ndarray
+    ) -> np.ndarray:
+        joint_prob = self._get_joint_matrix(obs_ts, A, B, bayes)
+        # Denominator
+        A_new = joint_prob.sum(axis=2)
+        return A_new
+
+    def _update_B_matrix(self, obs_ts: np.ndarray, bayes: np.ndarray):
+        numer_mat = np.zeros((bayes.shape[0], bayes.shape[0], obs_ts.shape))
+        return numer_mat
+
+    def optimize(self, obs_ts, A, B):
+        obs_ts = np.array(obs_ts)
+
+        bayes = bayesian.bayes_estimate(obs_ts, A, B)
+        A_new = self._update_A_matrix(obs_ts, A, B, bayes)
+        B_new = self._update_B_matrix(obs_ts, bayes)
+        return A_new, B_new
 
 
 if __name__ == "__main__":
@@ -178,7 +226,7 @@ if __name__ == "__main__":
 
     hmm = dynamics.HMM(2, 2)
     hmm.initialize_dynamics(A, B)
-    hmm.run_dynamics(10000)
+    hmm.run_dynamics(500)
     obs_ts = hmm.get_obs_ts()
 
     analyzer = infer.MarkovInfer(2, 2)
@@ -205,17 +253,22 @@ if __name__ == "__main__":
 
     param_init_legacy = [0.2, 0.05]
     start_leg = time.time()
-    legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
+    # legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
     end_leg = time.time()
     opt = LocalLikelihoodOptimizer(algorithm="SLSQP")
+    opt_em = EMOptimizer()
 
     start_new_nonsym = time.time()
-    res_nosym = opt.optimize(obs_ts, A_test, B_test)
+    # res_nosym = opt.optimize(obs_ts, A_test, B_test)
     end_new_nonsym = time.time()
 
     start_new_sym = time.time()
-    res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
+    # res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
     end_new_sym = time.time()
+
+    start_new_em = time.time()
+    res_em = opt_em.optimize(obs_ts, A_test, B_test)
+    end_new_em = time.time()
 
     print(f"Time Leg    : {end_leg - start_leg}")
     print(f"Time NonSym : {end_new_nonsym - start_new_nonsym}")
