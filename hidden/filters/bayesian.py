@@ -4,23 +4,28 @@ import numpy as np
 import numba
 
 
-# Currently I cant numba-optimize the vectorized version of this function (the
-# inner list comprehension), as the numpy repeat funtion apparently only works
-# within numba if it is acting on contiguous memory, and for some reason the
-# _bayes vector is non-contiguous... Currently this will just throw a numba
-# performance warning, but the runtime is significatly faster as is, than using
-# the vectorized code with no numba.
 @numba.jit(nopython=True)
 def bayes_estimate(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
+    """Implementation of Bayesian 'smoothing' algoithm. This calcualted the
+    probability distribution p(x | Y^T), conditioned on both past and future
+    informaton
+
+    Args:
+        obs_ts (np.ndarray): sequence of observations
+        trans_matrix (np.ndarray): hidden state transition rate matrix
+        obs_matrix (np.ndarray): observation/emmision probability matrix
+
+    Returns:
+        np.ndarray: array with each row representing the inferred probability
+        distribution over individual states
+    """
     # For this we dont make use of the predictions
     fwd_tracker, _ = forward_algo(obs_ts, trans_matrix, obs_matrix)
     N = trans_matrix.shape[0]
     bayes_smooth = np.zeros((len(obs_ts), trans_matrix.shape[0]), dtype=float)
     bayes_smooth[-1, :] = fwd_tracker[-1, :]
-    # This makes the `_trans_matrix` contiguous in memory, which is most
-    # efficient for numba, especially '@' apparently...
     _trans_matrix = trans_matrix.T.copy()
     _fwd_cont = np.ascontiguousarray(fwd_tracker[-2::-1, :])
 
@@ -72,12 +77,27 @@ def forward_algo(
 def backward_algo(
     observations: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """Backwards algorithm, calcualtes the probability P(x | Y^[t: T]), that is,
+    the probability distribution over the current system states, given all of
+    the future observations that will occur.
+
+    Args:
+        observations (np.ndarray): forward-time sequence of opservations
+        trans_matrix (np.ndarray): hidden state transition matrix
+        obs_matrix (np.ndarray): observation/emmision probability matrix
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: matrix with each row corresponding to
+        the inferred probability over states of the hidden system, conditioned
+        on all future observations, as well as a matrix of predictions of
+        probabilities
+    """
     back_track = np.zeros((len(observations), trans_matrix.shape[0]))
-    pred_track = np.zeros_like(back_track)
+    pred_track = np.zeros((len(observations), trans_matrix.shape[0]))
     back = np.ones(trans_matrix.shape[0]) / trans_matrix.shape[0]
 
     for i, obs in enumerate(observations[::-1]):
-        back, pred = _backward_filter(
+        back, pred = _forward_filter(
             obs, trans_matrix.T, obs_matrix.T, back
         )
         back_track[i, :] = back
@@ -116,6 +136,19 @@ def _backward_filter(
     obs: int, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
     back_est: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """Implementation of single-step of the Bayesian backward filter equations,
+    used to produce a recursive/running estimate of the hidden state
+    probability, conditioned on the entire future history of observations
+
+    Args:
+        obs (int): observation at time t
+        A (np.ndarray): transition probability matrix
+        B (np.ndarray): observation probability matrix
+        back_est_ (np.ndarray): Bayesian filtered backwards estimate
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: bayesian filter estimate, prediction
+    """
     back_est = trans_matrix.T @ back_est
     pred = back_est.copy()
     back_est = obs_matrix[:, obs] * back_est
@@ -141,7 +174,7 @@ def beta_prob(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
     beta_tracker = np.zeros((len(obs_ts), trans_matrix.shape[0]))
-    beta = np.ones(2)
+    beta = np.ones(trans_matrix.shape[0])
     beta_tracker[0, :] += beta
     for i, obs in enumerate(obs_ts[-1:0:-1]):
         beta = trans_matrix.T @ (beta * obs_matrix[:, obs])
