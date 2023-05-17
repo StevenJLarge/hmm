@@ -160,6 +160,18 @@ def _backward_filter(
 def alpha_prob(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
+    """routine to calculate the alpha function P(y^t | x_t ) for all obserations
+
+    Args:
+        obs_ts (np.ndarray): sequence of observations
+        trans_matrix (np.ndarray): transition rate matrix
+        obs_matrix (np.ndarray): observation/emission probability matrix
+
+    Returns:
+        np.ndarray: Matrix with each column corresponding to the alpha value
+        for each state, and each row representing the estimate at each point
+        in time
+    """
     alpha_tracker = np.zeros((len(obs_ts), trans_matrix.shape[0]))
     alpha = obs_matrix[:, obs_ts[0]].copy()
     alpha_tracker[0, :] = alpha
@@ -173,6 +185,18 @@ def alpha_prob(
 def beta_prob(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
+    """routine to calculate the beta function P(y^[t: T] | x_t ) for all obserations
+
+    Args:
+        obs_ts (np.ndarray): sequence of observations
+        trans_matrix (np.ndarray): transition rate matrix
+        obs_matrix (np.ndarray): observation/emission probability matrix
+
+    Returns:
+        np.ndarray: Matrix with each column corresponding to the beta value
+        for each state, and each row representing the estimate at each point
+        in time
+    """
     beta_tracker = np.zeros((len(obs_ts), trans_matrix.shape[0]))
     beta = np.ones(trans_matrix.shape[0])
     beta_tracker[0, :] += beta
