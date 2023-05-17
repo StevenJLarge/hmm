@@ -145,6 +145,4 @@ def test_return_from_estimate_is_correct_shape_2d(filter_func, N):
 
 
 if __name__ == "__main__":
-    import os
-    os.environ["NUMBA_DISABLE_JIT"] = "1"
     pytest.main([__file__])
