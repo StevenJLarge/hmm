@@ -62,6 +62,18 @@ filter_functions = [
 ]
 
 
+filter_test_data = [
+    (np.array([0.80, 0.20]), 2),
+    (np.array([0.50, 0.50]), 2),
+    (np.array([0.01, 0.99]), 2),
+    (np.array([0.15, 0.85]), 2),
+    (np.array([0.70, 0.20, 0.10]), 3),
+    (np.array([0.33, 0.33, 0.34]), 3),
+    (np.array([0.01, 0.98, 0.01]), 3),
+    (np.array([0.15, 0.75, 0.10]), 3),
+]
+
+
 @pytest.mark.parametrize(['filter_func', 'N'], itertools.product(filter_functions, [2, 3]))
 def test_return_from_estimate_is_correct_shape_2d(filter_func, N):
     # Arrange
@@ -85,7 +97,61 @@ def test_return_from_estimate_is_correct_shape_2d(filter_func, N):
         assert pred.shape == (n_steps, test_hmm.n_sys)
 
 
+@pytest.mark.parametrize(['fwd_init', 'N'], filter_test_data)
+def test_forward_filter_equations(fwd_init, N):
+    # Arrange
+    test_model = sample_hmm(N)
+    obs = 1
 
+    # Act
+    # Prediction step
+    fwd_pred = test_model.A @ fwd_init
+    # Observation step
+    fwd_filter = test_model.B[:, obs] * fwd_pred
+    fwd_filter = fwd_filter / np.sum(fwd_filter)
+
+    # Perform forward filter inside the bayesian module
+    res = bayesian._forward_filter(obs, test_model.A, test_model.B, fwd_init)
+    fwd_filter_prod = res[0]
+    fwd_pred_prod = res[1]
+
+    # Assert
+    assert all(np.isclose(fwd_filter, fwd_filter_prod))
+    assert all(np.isclose(fwd_pred, fwd_pred_prod))
+
+
+@pytest.mark.parametrize(['back_init', 'N'], filter_test_data)
+def test_backward_filter_equations(back_init, N):
+    # Arrange
+    test_model = sample_hmm(N)
+    obs = 1
+
+    # Act
+    # Backwards prediction
+    back_pred = test_model.A.T @ back_init
+    # Observation step
+    back_filter = test_model.B[obs, :] * back_pred
+    back_filter = back_filter / np.sum(back_filter)
+
+    # Perform backward filter using the module
+    res = bayesian._forward_filter(obs, test_model.A.T, test_model.B.T, back_init)
+    back_filter_prod = res[0]
+    back_pred_prod = res[1]
+
+    # Assert
+    assert all(np.isclose(back_filter, back_filter_prod))
+    assert all(np.isclose(back_pred, back_pred_prod))
+
+def test_bayesian_smoothing_equation():
+    pass
+
+
+def test_alpha_calculation():
+    pass
+
+
+def test_beta_calculation():
+    pass
 
 # # MOVE TO FILTERS
 # def test_bayesian_filter_equations(test_hmm):
