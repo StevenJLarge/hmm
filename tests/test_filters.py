@@ -62,6 +62,71 @@ filter_functions = [
 ]
 
 
+filter_test_data = [
+    (np.array([0.80, 0.20]), 2),
+    (np.array([0.50, 0.50]), 2),
+    (np.array([0.01, 0.99]), 2),
+    (np.array([0.15, 0.85]), 2),
+    (np.array([0.70, 0.20, 0.10]), 3),
+    (np.array([0.33, 0.33, 0.34]), 3),
+    (np.array([0.01, 0.98, 0.01]), 3),
+    (np.array([0.15, 0.75, 0.10]), 3),
+]
+
+sample_A_2 = np.array([
+    [0.7, 0.3],
+    [0.3, 0.7]
+])
+sample_B_2 = np.array([
+    [0.9, 0.1],
+    [0.1, 0.9]
+])
+
+sample_A_3 = np.array([
+    [0.6, 0.2, 0.2],
+    [0.2, 0.6, 0.2],
+    [0.2, 0.2, 0.6]
+])
+sample_B_3 = np.array([
+    [0.8, 0.1, 0.1],
+    [0.1, 0.8, 0.1],
+    [0.1, 0.1, 0.8]
+])
+
+
+sample_obs_seq_2 = np.array([1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1])
+sample_obs_seq_3 = np.array([1, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
+
+bayes_2_ini = np.array([0.05934857, 0.94065143])
+bayes_2_fin = np.array([0.16365312, 0.83634688])
+alpha_2_ini = np.array([0.1, 0.9])
+alpha_2_fin = np.array([1.16607475e-05, 5.95920813e-05])
+beta_2_ini = np.array([4.22875327e-05, 7.44711950e-05])
+beta_2_fin = np.array([1.0, 1.0])
+
+bayes_3_ini = np.array([0.22251862, 0.69124149, 0.08623989])
+bayes_3_fin = np.array([0.04392142, 0.04392197, 0.91215661])
+alpha_3_ini = np.array([0.1, 0.8, 0.1])
+alpha_3_fin = np.array([2.12415158e-07, 2.12417828e-07, 4.41142152e-06])
+beta_3_ini = np.array([1.07615669e-05, 4.17877471e-06, 4.17078047e-06])
+beta_3_fin = np.array([1.0, 1.0, 1.0])
+
+bayes_test_data = (
+    [sample_A_2, sample_B_2, sample_obs_seq_2, bayes_2_ini, bayes_2_fin],
+    [sample_A_3, sample_B_3, sample_obs_seq_3, bayes_3_ini, bayes_3_fin]
+)
+
+alpha_test_data = (
+    [sample_A_2, sample_B_2, sample_obs_seq_2, alpha_2_ini, alpha_2_fin],
+    [sample_A_3, sample_B_3, sample_obs_seq_3, alpha_3_ini, alpha_3_fin]
+)
+
+beta_test_data = (
+    [sample_A_2, sample_B_2, sample_obs_seq_2, beta_2_ini, beta_2_fin],
+    [sample_A_3, sample_B_3, sample_obs_seq_3, beta_3_ini, beta_3_fin]
+)
+
+
 @pytest.mark.parametrize(['filter_func', 'N'], itertools.product(filter_functions, [2, 3]))
 def test_return_from_estimate_is_correct_shape_2d(filter_func, N):
     # Arrange
@@ -85,66 +150,132 @@ def test_return_from_estimate_is_correct_shape_2d(filter_func, N):
         assert pred.shape == (n_steps, test_hmm.n_sys)
 
 
+# @pytest.mark.repeat(5)
+@pytest.mark.parametrize(['N'], [[2], [3]])
+def test_forward_algo_stays_normalized(N):
+    # Arange
+    test_model = sample_hmm(N)
+    test_model.init_uniform_cycle()
+    n_steps = 15
+
+    # Act
+    test_model.run_dynamics(n_steps)
+    obs = test_model.get_obs_ts()
+    fwd_tracker, _ = bayesian.forward_algo(obs, test_model.A, test_model.B)
+
+    # Assert
+    assert all(np.isclose(np.ones(n_steps), np.sum(fwd_tracker, axis=1)))
 
 
-# # MOVE TO FILTERS
-# def test_bayesian_filter_equations(test_hmm):
-#     # Arrange
-#     BayesInfer = infer.MarkovInfer(2, 2)
-#     bayes_init = np.array([0.8, 0.2])
-#     obs = 1
+# @pytest.mark.repeat(5)
+@pytest.mark.parametrize(['N'], [[2], [3]])
+def test_backward_algo_stays_normalized(N):
+    # Arange
+    test_model = sample_hmm(N)
+    test_model.init_uniform_cycle()
+    n_steps = 15
 
-#     # Act
-#     # Prediction step
-#     pred = test_hmm.A @ bayes_init
-#     # Observation step
-#     bayes_filter = test_hmm.B[:, obs] * pred
-#     bayes_filter = bayes_filter / np.sum(bayes_filter)
+    # Act
+    test_model.run_dynamics(n_steps)
+    obs = test_model.get_obs_ts()
+    back_tracker, _ = bayesian.backward_algo(np.array(obs), test_model.A, test_model.B)
 
-#     # Forward filtering within the infer module
-#     BayesInfer.bayes_filter = bayes_init
-#     BayesInfer.bayesian_filter(obs, test_hmm.A, test_hmm.B, False)
-
-#     # Assert
-#     assert (BayesInfer.bayes_filter == bayes_filter).all()
+    # Assert
+    assert all(np.isclose(np.ones(n_steps), np.sum(back_tracker, axis=1)))
 
 
-# # MOVE TO FILTERS
-# def test_bayesian_backward_filter(test_hmm):
-#     # Arrange
-#     BayesInfer = infer.MarkovInfer(2, 2)
-#     bayes_init = np.array([0.8, 0.2])
-#     obs = 1
+# @pytest.mark.repeat(10)
+@pytest.mark.parametrize(['N', 'exec_num'], list(itertools.product([2, 3], range(10))))
+def test_bayesian_algo_stays_normalized(N, exec_num):
+    # Arange
+    test_model = sample_hmm(N)
+    test_model.init_uniform_cycle()
+    n_steps = 15
 
-#     # Act
-#     # Backward algorithm (note the transpose here)
-#     pred = test_hmm.A.T @ bayes_init
-#     bayes_backward = test_hmm.B[:, obs] * pred
-#     bayes_backward = bayes_backward / np.sum(bayes_backward)
+    # Act
+    test_model.run_dynamics(n_steps)
+    obs = test_model.get_obs_ts()
+    bayes_tracker = bayesian.bayes_estimate(np.array(obs), test_model.A, test_model.B)
 
-#     # Backward filtering in the infer module
-#     BayesInfer.back_filter = bayes_init
-#     BayesInfer.bayesian_back(obs, test_hmm.A, test_hmm.B, False)
-
-#     # Assert
-#     assert (BayesInfer.back_filter == bayes_backward).all()
+    # Assert
+    assert all(np.isclose(np.ones(n_steps), np.sum(bayes_tracker, axis=1)))
 
 
-# def test_bayesian_smoothing_filter():
-#     # TODO
-#     pass
+@pytest.mark.parametrize(['fwd_init', 'N'], filter_test_data)
+def test_forward_filter_equations(fwd_init, N):
+    # Arrange
+    test_model = sample_hmm(N)
+    obs = 1
+
+    # Act
+    # Prediction step
+    fwd_pred = test_model.A @ fwd_init
+    # Observation step
+    fwd_filter = test_model.B[:, obs] * fwd_pred
+    fwd_filter = fwd_filter / np.sum(fwd_filter)
+
+    # Perform forward filter inside the bayesian module
+    res = bayesian._forward_filter(np.array(obs), test_model.A, test_model.B, fwd_init)
+    fwd_filter_prod = res[0]
+    fwd_pred_prod = res[1]
+
+    # Assert
+    assert all(np.isclose(fwd_filter, fwd_filter_prod))
+    assert all(np.isclose(fwd_pred, fwd_pred_prod))
 
 
-# def test_prediction_tracker_initialization_raises_for_invalid_direction():
-#     # Arrange
-#     BayesInfer = infer.MarkovInfer(2, 2)
+@pytest.mark.parametrize(['back_init', 'N'], filter_test_data)
+def test_backward_filter_equations(back_init, N):
+    # Arrange
+    test_model = sample_hmm(N)
+    obs = 1
 
-#     # Act / Assert
-#     with pytest.raises(ValueError):
-#         BayesInfer._initialize_pred_tracker(mode="INVALID")
+    # Act
+    # Backwards prediction
+    back_pred = test_model.A.T @ back_init
+    # Observation step
+    back_filter = test_model.B[obs, :] * back_pred
+    back_filter = back_filter / np.sum(back_filter)
+
+    # Perform backward filter using the module
+    res = bayesian._forward_filter(np.array(obs), test_model.A.T, test_model.B.T, back_init)
+    back_filter_prod = res[0]
+    back_pred_prod = res[1]
+
+    # Assert
+    assert all(np.isclose(back_filter, back_filter_prod))
+    assert all(np.isclose(back_pred, back_pred_prod))
+
+
+@pytest.mark.parametrize(['A', 'B', 'obs', 'bayes_i', 'bayes_f'], bayes_test_data)
+def test_bayesian_smoothing_equation(A, B, obs, bayes_i, bayes_f):
+    # Act
+    bayes_tracker = bayesian.bayes_estimate(obs, A, B)
+
+    # Assert
+    assert all(np.isclose(bayes_tracker[0, :], bayes_i))
+    assert all(np.isclose(bayes_tracker[-1, :], bayes_f))
+
+
+@pytest.mark.parametrize(['A', 'B', 'obs', 'alpha_i', 'alpha_f'], alpha_test_data)
+def test_alpha_calculation(A, B, obs, alpha_i, alpha_f):
+    # Act
+    alpha_tracker = bayesian.alpha_prob(obs, A, B)
+
+    # Assert
+    assert all(np.isclose(alpha_tracker[0, :], alpha_i))
+    assert all(np.isclose(alpha_tracker[-1, :], alpha_f))
+
+
+@pytest.mark.parametrize(['A', 'B', 'obs', 'beta_i', 'beta_f'], beta_test_data)
+def test_beta_calculation(A, B, obs, beta_i, beta_f):
+    # Act
+    beta_tracker = bayesian.beta_prob(obs, A, B)
+
+    # Assert
+    assert all(np.isclose(beta_tracker[0, :], beta_i))
+    assert all(np.isclose(beta_tracker[-1, :], beta_f))
 
 
 if __name__ == "__main__":
-    import os
-    os.environ["NUMBA_DISABLE_JIT"] = "1"
     pytest.main([__file__])
