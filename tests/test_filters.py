@@ -73,6 +73,9 @@ filter_test_data = [
     (np.array([0.15, 0.75, 0.10]), 3),
 ]
 
+sample_obs_seq_2 = [0, 1, 1, 1, 0, 0, 0, 1]
+sample_obs_seq_3 = [2, 1, 1, 2, 1, 0, 0, 0]
+
 
 @pytest.mark.parametrize(['filter_func', 'N'], itertools.product(filter_functions, [2, 3]))
 def test_return_from_estimate_is_correct_shape_2d(filter_func, N):
@@ -142,11 +145,24 @@ def test_backward_filter_equations(back_init, N):
     assert all(np.isclose(back_filter, back_filter_prod))
     assert all(np.isclose(back_pred, back_pred_prod))
 
-def test_bayesian_smoothing_equation():
+
+@pytest.mark.parametrize(['bayes_init', 'N'], filter_test_data)
+def test_bayesian_smoothing_equation(bayes_init, N):
+    # Arange
+    test_model = sample_hmm(N)
+    obs = 1
+
+    # Act
+    # NOTE need actual simulated data for this
+    fwd_tracker, _ = bayesian.forward_algo(obs, test_model.A, test_model.B)
+
     pass
 
 
 def test_alpha_calculation():
+    # Arrange
+    test_model = sample_hmm()
+    
     pass
 
 
