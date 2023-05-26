@@ -3,6 +3,7 @@
 from typing import Iterable, Optional, Tuple, Dict
 from operator import mul
 import numpy as np
+from pandas import DataFrame, Series
 from hidden.optimize.registry import OPTIMIZER_REGISTRY
 from hidden.optimize.base import OptClass
 from hidden.optimize.results import OptimizationResult
@@ -35,13 +36,27 @@ class MarkovInfer:
         self.n_sys = dim_sys
         self.n_obs = dim_obs
 
+    @staticmethod
+    def _validate_input(obs_ts):
+        # We want this to support input lists as well as pandas Series
+        if isinstance(obs_ts, list):
+            return np.array(obs_ts)
+        if isinstance(obs_ts, (Series, DataFrame)):
+            if 1 not in obs_ts.shape:
+                raise ValueError("Input observations must be 1-D...")
+            return obs_ts.to_numpy().flatten()
+
+        raise NotImplementedError(
+            "observation timeseries must be list or pandas Series/DataFrame"
+        )
+
     def forward_algo(
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
     ):
-        observations = np.array(observations)
+        observations = self._validate_input(observations)
         # This is now just an interface for the filter/bayesian methods
         self.forward_tracker, self.prediction_tracker = bayesian.forward_algo(
             observations, trans_matrix, obs_matrix
@@ -53,7 +68,7 @@ class MarkovInfer:
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
     ):
-        observations = np.array(observations)
+        observations = self._validate_input(observations)
         self.backward_tracker, self.predictions_back = bayesian.backward_algo(
             observations, trans_matrix, obs_matrix
         )
@@ -62,7 +77,7 @@ class MarkovInfer:
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
     ):
-        observations = np.array(observations)
+        observations = self._validate_input(observations)
         self.alpha_tracker = bayesian.alpha_prob(
             observations, trans_matrix, obs_matrix
         )
@@ -71,7 +86,7 @@ class MarkovInfer:
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
     ):
-        observations = np.array(observations)
+        observations = self._validate_input(observations)
         self.beta_tracker = bayesian.beta_prob(
             observations, trans_matrix, obs_matrix
         )
@@ -80,7 +95,7 @@ class MarkovInfer:
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
     ):
-        observations = np.array(observations)
+        observations = self._validate_input(observations)
         self.bayes_smooth = bayesian.bayes_estimate(
             observations, trans_matrix, obs_matrix
         )
@@ -102,7 +117,7 @@ class MarkovInfer:
             raise ValueError(
                 'Invalid `opt_class`, must be a member of OptClass enum...'
             )
-        observations = np.array(observations)
+        observations = self._validate_input(observations)
         # For the global optimizer, I need n_params, dim_tuple, and
         optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
         if (opt_type is OptClass.Global):
