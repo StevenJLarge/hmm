@@ -10,7 +10,7 @@ import numba
 # _bayes vector is non-contiguous... Currently this will just throw a numba
 # performance warning, but the runtime is significatly faster as is, than using
 # the vectorized code with no numba.
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def bayes_estimate(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
@@ -36,7 +36,7 @@ def bayes_estimate(
     return bayes_smooth
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def forward_algo(
     observations: Iterable, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -68,7 +68,7 @@ def forward_algo(
     return fwd_track, pred_track
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def backward_algo(
     observations: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -86,7 +86,7 @@ def backward_algo(
     return np.flipud(back_track), np.flipud(pred_track)
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def _forward_filter(
     obs: int, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
     fwd_est: np.ndarray
@@ -111,7 +111,7 @@ def _forward_filter(
     return fwd_est, pred
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def _backward_filter(
     obs: int, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
     back_est: np.ndarray
@@ -123,7 +123,7 @@ def _backward_filter(
     return back_est, pred
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def alpha_prob(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
@@ -136,7 +136,7 @@ def alpha_prob(
     return alpha_tracker
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def beta_prob(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
