@@ -251,6 +251,15 @@ if __name__ == "__main__":
         [0.05, 0.95]
     ])
 
+    # test for a 3-state model
+    hmm3 = dynamics.HMM(3, 3)
+    hmm3.init_uniform_cycle(0.15, 0.23)
+    A_test_3 = hmm3.A.copy()
+    B_test_3 = hmm3.B.copy()
+    hmm3.init_uniform_cycle(0.2, 0.25)
+    hmm3.run_dynamics(100000)
+    obs_ts_3 = hmm3.get_obs_ts()
+
     param_init_legacy = [0.2, 0.05]
     start_leg = time.time()
     # legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
@@ -265,6 +274,8 @@ if __name__ == "__main__":
     start_new_sym = time.time()
     # res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
     end_new_sym = time.time()
+
+    res_3state = opt.optimize(obs_ts_3, A_test_3, B_test_3, symmetric=True)
 
     start_new_em = time.time()
     res_em = opt_em.optimize(obs_ts, A_test, B_test)
