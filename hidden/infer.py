@@ -39,16 +39,24 @@ class MarkovInfer:
     @staticmethod
     def _validate_input(obs_ts):
         # We want this to support input lists as well as pandas Series
+        if isinstance(obs_ts, np.ndarray):
+            if 1 in obs_ts.shape or len(obs_ts.shape) == 1:
+                return obs_ts.flatten()
+            else:
+                raise ValueError("Input observations must be 1-D...")
+
         if isinstance(obs_ts, list):
             return np.array(obs_ts)
         if isinstance(obs_ts, (Series, DataFrame)):
-            if 1 not in obs_ts.shape:
+            if 1 in obs_ts.shape or len(obs_ts.shape) == 1:
+                return obs_ts.to_numpy().flatten()
+            else:
                 raise ValueError("Input observations must be 1-D...")
-            return obs_ts.to_numpy().flatten()
 
-        raise NotImplementedError(
-            "observation timeseries must be list or pandas Series/DataFrame"
-        )
+        else:
+            raise NotImplementedError(
+                "observation timeseries must be list or pandas Series/DataFrame"
+            )
 
     def forward_algo(
         self,
