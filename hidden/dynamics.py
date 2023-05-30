@@ -21,6 +21,7 @@ class HMM:
     def initialize_dynamics(self, A: np.ndarray, B: np.ndarray):
         self.A = A
         self.B = B
+        self.C = A
 
     def init_uniform_cycle(
         self, trans_rate: Optional[int] = 0.3,
