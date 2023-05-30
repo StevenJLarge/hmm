@@ -1,7 +1,8 @@
 # Testing suite for inferrence routines
-import numpy as np
 import pytest
 import itertools
+import numpy as np
+import pandas as pd
 
 from hidden import infer
 from hidden import dynamics
@@ -35,6 +36,14 @@ sample_disc = [2, 0, 1]
 
 sym_test = [True, False]
 opt_type_test = OptClass._member_names_
+
+sample_obs = (
+    np.array([0, 1, 2]), [0, 1, 2], pd.DataFrame([0, 1, 2]),
+    pd.DataFrame({'0': 0, '1': 1, "2": 2}, index=[0]), pd.Series([1, 2, 3])
+)
+sample_obs_err = (
+    np.ones((4, 2)), pd.DataFrame(np.ones((4, 2))), {'0': 0, '1': 1, '2': 2}
+)
 
 
 @pytest.fixture
@@ -159,6 +168,23 @@ def test_discord_calculation(sample_data):
 
     # Assert
     assert discord_ == discord
+
+
+# Tests for input validation
+@pytest.mark.parametrize('obs_input', sample_obs)
+def test_input_observations_validation(obs_input):
+    # Arrange / Act
+    obs = infer.MarkovInfer._validate_input(obs_input)
+
+    # Assert
+    assert isinstance(obs, np.ndarray)
+
+
+@pytest.mark.parametrize('obs_input', sample_obs_err)
+def test_invalid_input_observation_raises_in_validation(obs_input):
+    # Arrange / Act / Assert
+    with pytest.raises((ValueError, NotImplementedError)):
+        _ = infer.MarkovInfer._validate_input(obs_input)
 
 
 @pytest.mark.parametrize(
