@@ -1,5 +1,5 @@
 # Bayesian filters -- Fowrward, backward, bayesian
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Optional
 import numpy as np
 import numba
 
@@ -158,7 +158,8 @@ def _backward_filter(
 
 @numba.jit(nopython=True)
 def alpha_prob(
-    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
+    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+    norm: Optional[bool] = False
 ) -> np.ndarray:
     """routine to calculate the alpha function P(y^t | x_t ) for all obserations
 
@@ -178,12 +179,23 @@ def alpha_prob(
     for i, obs in enumerate(obs_ts[1:]):
         alpha = (trans_matrix @ alpha) * obs_matrix[:, obs]
         alpha_tracker[i + 1, :] = alpha
+    if norm:
+        alpha_tracker = (
+            alpha_tracker / np.repeat(
+                alpha_tracker
+                .sum(axis=1)
+                .reshape(-1, 1),
+                alpha_tracker.shape[1]
+            ).reshape(alpha_tracker.shape)
+        )
+
     return alpha_tracker
 
 
 @numba.jit(nopython=True)
 def beta_prob(
-    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
+    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+    norm: Optional[bool] = False
 ) -> np.ndarray:
     """routine to calculate the beta function P(y^[t: T] | x_t ) for all obserations
 
@@ -203,6 +215,15 @@ def beta_prob(
     for i, obs in enumerate(obs_ts[-1:0:-1]):
         beta = trans_matrix.T @ (beta * obs_matrix[:, obs])
         beta_tracker[i + 1, :] = beta
+    if norm:
+        beta_tracker = (
+            beta_tracker / np.repeat(
+                beta_tracker
+                .sum(axis=1)
+                .reshape(-1, 1),
+                beta_tracker.shape[1]
+            ).reshape(beta_tracker.shape)
+        )
     return beta_tracker[::-1]
 
 
@@ -235,21 +256,24 @@ if __name__ == "__main__":
 
     # Filter file implementations
     start_1 = time.time()
-    fwd_tracker_alt, _ = forward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    bck_tracker_alt, _ = backward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    bayes_tracker_alt = bayes_estimate(np.array(obs_ts), hmm.A, hmm.B)
+    # fwd_tracker_alt, _ = forward_algo(np.array(obs_ts), hmm.A, hmm.B)
+    # bck_tracker_alt, _ = backward_algo(np.array(obs_ts), hmm.A, hmm.B)
+    # bayes_tracker_alt = bayes_estimate(np.array(obs_ts), hmm.A, hmm.B)
     alpha_alt = alpha_prob(np.array(obs_ts), hmm.A, hmm.B)
     beta_alt = beta_prob(np.array(obs_ts), hmm.A, hmm.B)
+    alpha_alt_norm = alpha_prob(np.array(obs_ts), hmm.A, hmm.B, norm=True)
+    beta_alt_norm = beta_prob(np.array(obs_ts), hmm.A, hmm.B, norm=True)
     end_1 = time.time()
 
     # Second repetition is much faster
-
     start_2 = time.time()
-    fwd_tracker_alt, _ = forward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    bck_tracker_alt, _ = backward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    bayes_tracker_alt = bayes_estimate(np.array(obs_ts), hmm.A, hmm.B)
+    # fwd_tracker_alt, _ = forward_algo(np.array(obs_ts), hmm.A, hmm.B)
+    # bck_tracker_alt, _ = backward_algo(np.array(obs_ts), hmm.A, hmm.B)
+    # bayes_tracker_alt = bayes_estimate(np.array(obs_ts), hmm.A, hmm.B)
     alpha_alt = alpha_prob(np.array(obs_ts), hmm.A, hmm.B)
     beta_alt = beta_prob(np.array(obs_ts), hmm.A, hmm.B)
+    alpha_alt_norm = alpha_prob(np.array(obs_ts), hmm.A, hmm.B, norm=True)
+    beta_alt_norm = beta_prob(np.array(obs_ts), hmm.A, hmm.B, norm=True)
     end_2 = time.time()
 
     print("----- Timer results -----")
