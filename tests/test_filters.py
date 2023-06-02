@@ -277,5 +277,23 @@ def test_beta_calculation(A, B, obs, beta_i, beta_f):
     assert all(np.isclose(beta_tracker[-1, :], beta_f))
 
 
+@ pytest.mark.parametrize(['A', 'B', 'obs', 'alpha_i', "alpha_f"], alpha_test_data)
+def test_alpha_is_state_normalized_when_keyword_is_passed(A, B, obs, alpha_i, alpha_f):
+    # Act
+    alpha_norm = bayesian.alpha_prob(obs, A, B, norm=True)
+
+    # Assert
+    assert all(np.isclose(alpha_norm.sum(axis=1), 1.0))
+
+
+@ pytest.mark.parametrize(['A', 'B', 'obs', 'beta_i', "beta_f"], beta_test_data)
+def test_beta_is_state_normalized_when_keyword_is_passed(A, B, obs, beta_i, beta_f):
+    # Act
+    beta_norm = bayesian.beta_prob(obs, A, B, norm=True)
+
+    # Assert
+    assert all(np.isclose(beta_norm.sum(axis=1), 1.0))
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
