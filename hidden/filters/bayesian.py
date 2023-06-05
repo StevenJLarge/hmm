@@ -21,51 +21,23 @@ def bayes_estimate(
         np.ndarray: array with each row representing the inferred probability
         distribution over individual states
     """
-    # For this we dont make use of the predictions
-    fwd_tracker, _ = forward_algo(obs_ts, trans_matrix, obs_matrix)
-    N = trans_matrix.shape[0]
-    bayes_smooth = np.zeros((len(obs_ts), trans_matrix.shape[0]), dtype=float)
-    bayes_smooth[-1, :] = fwd_tracker[-1, :]
-    # _trans_matrix = trans_matrix.T.copy()
-    _fwd_cont = np.ascontiguousarray(fwd_tracker[-2::-1, :])
-
-    for i in range(_fwd_cont.shape[0]):
-        _filt = _fwd_cont[i, :]
-        _bayes = bayes_smooth[-(i + 1), :]
-        # pred = _trans_matrix @ _filt
-        pred = trans_matrix @ _filt
-        summand = np.array(
-            # [np.sum(_bayes * _trans_matrix[:, j] / pred) for j in range(N)]
-            [np.sum(_bayes * trans_matrix[:, j] / pred) for j in range(N)]
-        )
-        bayes_smooth[-(i + 2), :] = _filt * summand
-
-    return bayes_smooth
-
-
-def bayes_estimate_alt(
-    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
-) -> np.ndarray:
-
     fwd_tracker, pred = forward_algo(obs_ts, trans_matrix, obs_matrix)
 
     bayes_smooth = np.zeros((len(obs_ts), trans_matrix.shape[1]), dtype=float)
     bayes_smooth[-1, :] = fwd_tracker[-1, :]
 
-    # _fwd_filt = np.ascontiguousarray(fwd_tracker[-2::-1, :])
-
-    # for i in range(_fwd_filt.shape[0]):
+    # Iterate backwards through the forward tracker from N-1 -> 1
     for i in range(fwd_tracker.shape[0] - 1, 0, -1):
-        # _filt = _fwd_filt[i, :]
-        # _filt = fwd_tracker[i - 1, :]
-        # _bayes = bayes_smooth[-(i + 1), :]
-        # _bayes = bayes_smooth[i, :]
-        # _pred = pred[-(i + 1), :]
-        # _pred = pred[i, :]
-        ratio = np.repeat((bayes_smooth[i, :] / pred[i, :]).reshape(-1, 1), trans_matrix.shape[1], axis=1)
+        # Ratio of previous bayesian estimates to forward predictions, reshaped
+        # to match trans_matrix shape
+        ratio = np.repeat(
+            (bayes_smooth[i, :] / pred[i, :]).reshape(-1, 1),
+            trans_matrix.shape[1],
+            axis=1
+        )
+        # summation term
         summand = np.sum(trans_matrix * ratio, axis=0)
-        # bayes_smooth[-(i + 2), :] = _filt * summand
-        # bayes_smooth[i - 1, :] = _filt * summand
+        # Smoothed bayesian estimate
         bayes_smooth[i - 1, :] = fwd_tracker[i - 1, :] * summand
 
     return bayes_smooth
@@ -280,7 +252,6 @@ if __name__ == "__main__":
     analyzer = MarkovInfer(2, 2)
 
     est_bayes_1 = bayes_estimate(np.array(obs_ts), A_sample, B_sample)
-    est_bayes_2 = bayes_estimate_alt(np.array(obs_ts), A_sample, B_sample)
 
     print("----- Timer results -----")
     # print(f"First iterations  : {end_1 - start_1}")
