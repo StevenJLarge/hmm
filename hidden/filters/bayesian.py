@@ -4,7 +4,7 @@ import numpy as np
 import numba
 
 
-# @numba.jit(nopython=True)
+@numba.jit(nopython=True)
 def bayes_estimate(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
@@ -25,16 +25,13 @@ def bayes_estimate(
 
     bayes_smooth = np.zeros((len(obs_ts), trans_matrix.shape[1]), dtype=float)
     bayes_smooth[-1, :] = fwd_tracker[-1, :]
+    ratio = np.zeros(trans_matrix.shape)
 
     # Iterate backwards through the forward tracker from N-1 -> 1
     for i in range(fwd_tracker.shape[0] - 1, 0, -1):
-        # Ratio of previous bayesian estimates to forward predictions, reshaped
+        # Ratio of previous bayesian estimates to forward predictions, shaped
         # to match trans_matrix shape
-        ratio = np.repeat(
-            (bayes_smooth[i, :] / pred[i, :]).reshape(-1, 1),
-            trans_matrix.shape[1],
-            axis=1
-        )
+        ratio[:, :] = (bayes_smooth[i, :] / pred[i, :]).reshape(-1, 1)
         # summation term
         summand = np.sum(trans_matrix * ratio, axis=0)
         # Smoothed bayesian estimate
@@ -251,10 +248,16 @@ if __name__ == "__main__":
 
     analyzer = MarkovInfer(2, 2)
 
+    start_1 = time.time()
     est_bayes_1 = bayes_estimate(np.array(obs_ts), A_sample, B_sample)
+    end_1 = time.time()
+
+    start_2 = time.time()
+    est_bayes_1 = bayes_estimate(np.array(obs_ts), A_sample, B_sample)
+    end_2 = time.time()
 
     print("----- Timer results -----")
-    # print(f"First iterations  : {end_1 - start_1}")
-    # print(f"Second iterations : {end_2 - start_2}")
+    print(f"First iterations  : {end_1 - start_1}")
+    print(f"Second iterations : {end_2 - start_2}")
 
     print("\n\t-- DONE --\n")
