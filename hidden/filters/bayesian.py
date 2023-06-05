@@ -4,7 +4,7 @@ import numpy as np
 import numba
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def bayes_estimate(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
@@ -34,7 +34,7 @@ def bayes_estimate(
         _bayes = bayes_smooth[-(i + 1), :]
         pred = _trans_matrix @ _filt
         summand = np.array(
-            [np.sum(_bayes * trans_matrix[:, j] / pred) for j in range(N)]
+            [np.sum(_bayes * _trans_matrix[:, j] / pred) for j in range(N)]
         )
         bayes_smooth[-(i + 2), :] = _filt * summand
 
@@ -177,7 +177,7 @@ def alpha_prob(
     alpha = obs_matrix[:, obs_ts[0]].copy()
     alpha_tracker[0, :] = alpha
     for i, obs in enumerate(obs_ts[1:]):
-        alpha = (trans_matrix @ alpha) * obs_matrix[:, obs]
+        alpha = (trans_matrix @ alpha) * obs_matrix[obs, :]
         alpha_tracker[i + 1, :] = alpha
     if norm:
         alpha_tracker = (
@@ -239,6 +239,14 @@ if __name__ == "__main__":
     hmm.run_dynamics(500)
     obs_ts, state_ts = hmm.get_obs_ts(), hmm.get_state_ts()
 
+    A_perturb = np.array([
+        [-0.05, 0.04],
+        [0.05, -0.04]
+    ])
+
+    A_sample = hmm.A + A_perturb
+    B_sample = hmm.B + A_perturb
+
     analyzer = MarkovInfer(2, 2)
 
     # Current implementations
@@ -258,11 +266,11 @@ if __name__ == "__main__":
     start_1 = time.time()
     # fwd_tracker_alt, _ = forward_algo(np.array(obs_ts), hmm.A, hmm.B)
     # bck_tracker_alt, _ = backward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    # bayes_tracker_alt = bayes_estimate(np.array(obs_ts), hmm.A, hmm.B)
-    alpha_alt = alpha_prob(np.array(obs_ts), hmm.A, hmm.B)
-    beta_alt = beta_prob(np.array(obs_ts), hmm.A, hmm.B)
-    alpha_alt_norm = alpha_prob(np.array(obs_ts), hmm.A, hmm.B, norm=True)
-    beta_alt_norm = beta_prob(np.array(obs_ts), hmm.A, hmm.B, norm=True)
+    bayes_tracker_alt = bayes_estimate(np.array(obs_ts), A_sample, B_sample)
+    alpha_alt = alpha_prob(np.array(obs_ts), A_sample, B_sample)
+    beta_alt = beta_prob(np.array(obs_ts), A_sample, B_sample)
+    alpha_alt_norm = alpha_prob(np.array(obs_ts), A_sample, B_sample, norm=True)
+    beta_alt_norm = beta_prob(np.array(obs_ts), A_sample, B_sample, norm=True)
     end_1 = time.time()
 
     # Second repetition is much faster
