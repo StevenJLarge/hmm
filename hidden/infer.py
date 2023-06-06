@@ -116,8 +116,8 @@ class MarkovInfer:
         return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
     def optimize(
-        self, observations, trans_init: np.ndarray, obs_init: np.ndarray,
-        symmetric: Optional[bool] = False,
+        self, observations: Iterable, trans_init: np.ndarray,
+        obs_init: np.ndarray, symmetric: Optional[bool] = False,
         opt_type: Optional[OptClass] = OptClass.Local,
         algo_opts: Optional[Dict] = {}
     ) -> OptimizationResult:

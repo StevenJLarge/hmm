@@ -171,7 +171,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
     @staticmethod
     def _get_xi_matrix(
-        obs: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
     ):
         # Declare xi array (joint probability numerator)
@@ -180,7 +180,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         for t in range(1, len(obs_ts)):
             xi[:, :, t - 1] = (
                 trans_matrix
-                * np.vstack([obs_matrix[:, obs[t]], obs_matrix[:, obs[t]]]).T
+                * np.vstack([obs_matrix[:, obs_ts[t]], obs_matrix[:, obs_ts[t]]]).T
                 * np.outer(
                     beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
                 )
@@ -190,7 +190,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
     @staticmethod
     def _get_denom_matrix(
-            obs: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+            obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
             alpha_norm: np.ndarray, beta_norm: np.ndarray
         ):
         xi_denom = np.zeros((1, trans_matrix.shape[0], len(obs_ts) - 1))
@@ -198,7 +198,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         for t in range(1, len(obs_ts)):
             xi_denom[:, :, t-1] = np.sum(
                 trans_matrix
-                * np.vstack([obs_matrix[:, obs[t]], obs_matrix[:, obs[t]]]).T
+                * np.vstack([obs_matrix[:, obs_ts[t]], obs_matrix[:, obs_ts[t]]]).T
                 * np.outer(
                     beta_norm[t, :], alpha_norm[t - 1, :]
                 )
@@ -273,9 +273,11 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
     def optimize(
         self, obs_ts: np.ndarray, trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray, norm: Optional[str] = 'fro',
-        threshold: Optional[float] = 1e-8, maxiter: Optional[int] = 1000,
-        tracking: Optional[Union[bool, int]] = False
+        obs_matrix: np.ndarray, symmetric: Optional[bool] = False,
+        norm: Optional[str] = 'fro', threshold: Optional[float] = 1e-8,
+        maxiter: Optional[int] = 5000,
+        tracking: Optional[Union[bool, int]] = False,
+        tracking_interval: Optional[int] = 100
     ):
 
         obs_ts = np.array(obs_ts)
@@ -302,10 +304,10 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             )
             update_tracker.append(update_size)
 
-            iter_count += 1
-            if tracking:
+            if tracking and (iter_count % tracking_interval == 0):
                 trans_mat_tracker.append(trans_matrix)
                 obs_mat_tracker.append(obs_matrix)
+            iter_count += 1
 
         return trans_matrix, obs_matrix
 
@@ -313,6 +315,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 if __name__ == "__main__":
     import time
     from hidden import dynamics, infer
+    from hidden.optimize.base import OptClass
     # testing routines here, lets work with symmetric ''true' matrices
     A = np.array([
         [0.7, 0.3],
@@ -367,7 +370,8 @@ if __name__ == "__main__":
     end_new_sym = time.time()
 
     start_new_em = time.time()
-    res_em = opt_em.optimize(obs_ts, A_test, B_test)
+    # res_em = opt_em.optimize(obs_ts, A_test, B_test)
+    res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
     end_new_em = time.time()
 
     print(f"Time Leg    : {end_leg - start_leg}")
