@@ -168,46 +168,102 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         pass
 
     @staticmethod
-    def _get_joint_matrix(obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray, bayes: np.ndarray):
-        # I think this is a len - 1? Double check how long the bayes estimator is?
-        xi = np.zeros((*A.shape, len(bayes) - 1))
+    def _get_xi_matrix(
+        obs: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
+    ):
+        # Declare xi array (joint probability numerator)
+        xi = np.zeros((*trans_matrix.shape, len(obs_ts) - 1))
 
-        alpha = bayesian.alpha_prob(obs_ts, A, B)
-        beta = bayesian.beta_prob(obs_ts, A, B)
+        for t in range(1, len(obs_ts)):
+            xi[:, :, t - 1] = (
+                trans_matrix
+                * np.vstack([obs_matrix[:, obs[t]], obs_matrix[:, obs[t]]]).T
+                * np.outer(
+                    beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
+                )
+            )
 
-        for i, (_alp, _bet, _p) in enumerate(zip(alpha[:-1], beta[1:], bayes[:-1])):
-            numer_mat = np.outer(_bet, _alp) * A
-            denom_vec = np.repeat(
-                numer_mat.sum(axis=1).reshape(A.shape[0], 1),
-                A.shape[0], axis=1
-            )
-            bayes_mat = np.repeat(
-                _p.reshape(A.shape[0], 1),
-                A.shape[0], axis=1
-            )
-            xi[:, :, i] = (numer_mat / denom_vec) * bayes_mat
-        # Could potentially perform the summation before returning the array here?
         return xi
 
-    def _update_A_matrix(
-        self, obs_ts: Iterable, A: np.ndarray, B: np.ndarray, bayes: np.ndarray
-    ) -> np.ndarray:
-        joint_prob = self._get_joint_matrix(obs_ts, A, B, bayes)
-        # Denominator
-        A_new = joint_prob.sum(axis=2)
-        return A_new
+    @staticmethod
+    def _get_denom_matrix(
+            obs: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+            alpha_norm: np.ndarray, beta_norm: np.ndarray
+        ):
+        xi_denom = np.zeros((1, trans_matrix.shape[0], len(obs_ts) - 1))
 
-    def _update_B_matrix(self, obs_ts: np.ndarray, bayes: np.ndarray):
-        numer_mat = np.zeros((bayes.shape[0], bayes.shape[0], obs_ts.shape))
-        return numer_mat
+        for t in range(1, len(obs_ts)):
+            xi_denom[:, :, t-1] = np.sum(
+                trans_matrix
+                * np.vstack([obs_matrix[:, obs[t]], obs_matrix[:, obs[t]]]).T
+                * np.outer(
+                    beta_norm[t, :], alpha_norm[t - 1, :]
+                )
+            , axis=0)
 
-    def optimize(self, obs_ts, A, B):
+        # And then we sum over the columns
+        xi_denom = np.vstack([xi_denom, xi_denom])
+
+        return xi_denom
+
+    @staticmethod
+    def _update_transition_matrix(
+        obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray
+    ):
+        xi_numer = EMOptimizer._get_xi_matrix(
+            obs_ts, trans_matrix, obs_matrix, alpha, beta, bayes
+        )
+
+        xi_denom = EMOptimizer._get_denom_matrix(
+            obs_ts, trans_matrix, obs_matrix, alpha, beta
+        )
+
+        ratio = xi_numer / xi_denom
+        bayes_matrix = np.repeat(
+            (1 / bayes[:-1, :].sum(axis=0)).reshape(1, trans_matrix.shape[0]),
+            trans_matrix.shape[1],
+            axis=0
+        )
+
+        trans_matrix_updated = np.sum(ratio, axis=2) * bayes_matrix
+        return trans_matrix_updated
+
+    @staticmethod
+    def _update_observation_matrix():
+        pass
+
+    def baum_welch_step(
+        self, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        obs_ts: np.ndarray
+    ):
+        # Expectation step: calculate quantities
+        alpha_ts = self.analyzer.alpha(obs_ts, trans_matrix, obs_matrix, norm=True)
+        beta_ts = self.analyzer.beta(obs_ts, trans_matrix, obs_matrix, norm=True) 
+        bayes_ts = self.analyzer.bayesian_smooth(obs_ts, trans_matrix, obs_matrix)
+
+        # Maximization step: update matrices
+        trans_matrix_updated = EMOptimizer._update_transition_matrix(
+            obs_ts, trans_matrix, obs_matrix, alpha_ts, beta_ts, bayes_ts
+        )
+        obs_matrix_updated = EMOptimizer._update_observation_matrix()
+
+        return trans_matrix_updated, obs_matrix_updated
+
+    def optimize(self, obs_ts, trans_matrix, obs_matrix):
+        # NOTE Need to add in additional logic for cnovergence, etc.
         obs_ts = np.array(obs_ts)
+        self.analyzer = infer.MarkovInfer(
+            trans_matrix.shape[0], obs_matrix.shape[0]
+        )
 
-        bayes = bayesian.bayes_estimate(obs_ts, A, B)
-        A_new = self._update_A_matrix(obs_ts, A, B, bayes)
-        B_new = self._update_B_matrix(obs_ts, bayes)
-        return A_new, B_new
+        # Other inputs for convergence criteria?
+        trans_matrix, obs_matrix = self.baum_welch_step(
+            trans_matrix, obs_matrix, obs_ts
+        )
+
+        return trans_matrix, obs_matrix
 
 
 if __name__ == "__main__":
