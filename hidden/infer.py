@@ -83,20 +83,20 @@ class MarkovInfer:
 
     def alpha(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray
+        obs_matrix: np.ndarray, norm: Optional[bool] = False
     ):
         observations = self._validate_input(observations)
         self.alpha_tracker = bayesian.alpha_prob(
-            observations, trans_matrix, obs_matrix
+            observations, trans_matrix, obs_matrix, norm=norm
         )
 
     def beta(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray
+        obs_matrix: np.ndarray, norm: Optional[bool] = True
     ):
         observations = self._validate_input(observations)
         self.beta_tracker = bayesian.beta_prob(
-            observations, trans_matrix, obs_matrix
+            observations, trans_matrix, obs_matrix, norm=norm
         )
 
     def bayesian_smooth(
