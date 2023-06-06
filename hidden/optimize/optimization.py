@@ -1,7 +1,8 @@
-from typing import Iterable, Tuple, Optional
+from typing import Iterable, Tuple, Optional, Union
 from operator import mul
 import numpy as np
 import scipy.optimize as so
+import scipy.linalg as sl
 
 from hidden.optimize.results import LikelihoodOptimizationResult
 from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
@@ -208,6 +209,15 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return xi_denom
 
     @staticmethod
+    def _gamma_numer(obs: int, t: int, bayes: np.ndarray):
+        # NOTE this must be vectorizable...
+        obs_num = np.zeros((bayes.shape[1], bayes.shape[1]))
+
+        target_row = obs
+        obs_num[target_row] = bayes[t, :]
+        return obs_num
+
+    @staticmethod
     def _update_transition_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray
@@ -231,8 +241,14 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return trans_matrix_updated
 
     @staticmethod
-    def _update_observation_matrix():
-        pass
+    def _update_observation_matrix(obs_ts: np.ndarray, bayes: np.ndarray):
+        gamma_mat = np.zeros((bayes.shape[1], bayes.shape[1], len(obs_ts)))
+
+        for i, obs in enumerate(obs_ts):
+            gamma_mat[:, :, i] = EMOptimizer._get_gamma_num(obs, i, bayes)
+        gamma_denom = np.vstack([bayes.T, bayes.T]).reshape(gamma_mat.shape)
+
+        return (gamma_mat.sum(axis=2) / gamma_denom.sum(axis=2))
 
     def baum_welch_step(
         self, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
@@ -240,28 +256,54 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
     ):
         # Expectation step: calculate quantities
         alpha_ts = self.analyzer.alpha(obs_ts, trans_matrix, obs_matrix, norm=True)
-        beta_ts = self.analyzer.beta(obs_ts, trans_matrix, obs_matrix, norm=True) 
+        beta_ts = self.analyzer.beta(obs_ts, trans_matrix, obs_matrix, norm=True)
         bayes_ts = self.analyzer.bayesian_smooth(obs_ts, trans_matrix, obs_matrix)
 
         # Maximization step: update matrices
         trans_matrix_updated = EMOptimizer._update_transition_matrix(
             obs_ts, trans_matrix, obs_matrix, alpha_ts, beta_ts, bayes_ts
         )
-        obs_matrix_updated = EMOptimizer._update_observation_matrix()
+        obs_matrix_updated = EMOptimizer._update_observation_matrix(
+            obs_ts, bayes_ts
+        )
 
         return trans_matrix_updated, obs_matrix_updated
 
-    def optimize(self, obs_ts, trans_matrix, obs_matrix):
-        # NOTE Need to add in additional logic for cnovergence, etc.
+    def optimize(
+        self, obs_ts: np.ndarray, trans_matrix: np.ndarray,
+        obs_matrix: np.ndarray, norm: Optional[str] = 'fro',
+        threshold: Optional[float] = 1e-8, maxiter: Optional[int] = 1000,
+        tracking: Optional[Union[bool, int]] = False
+    ):
+
         obs_ts = np.array(obs_ts)
         self.analyzer = infer.MarkovInfer(
             trans_matrix.shape[0], obs_matrix.shape[0]
         )
+        iter_count = 0
+        update_size = threshold + 1
+        update_tracker = []
+        if tracking:
+            trans_mat_tracker = []
+            obs_mat_tracker = []
 
-        # Other inputs for convergence criteria?
-        trans_matrix, obs_matrix = self.baum_welch_step(
-            trans_matrix, obs_matrix, obs_ts
-        )
+        while update_size > threshold and iter_count < maxiter:
+            prev_trans, prev_obs = trans_matrix, obs_matrix
+
+            trans_matrix, obs_matrix = self.baum_welch_step(
+                trans_matrix, obs_matrix, obs_ts
+            )
+
+            update_size = np.max(
+                [sl.norm(prev_trans - trans_matrix, ord=norm),
+                sl.norm(prev_obs - obs_matrix, ord=norm)]
+            )
+            update_tracker.append(update_size)
+
+            iter_count += 1
+            if tracking:
+                trans_mat_tracker.append(trans_matrix)
+                obs_mat_tracker.append(obs_matrix)
 
         return trans_matrix, obs_matrix
 
