@@ -7,6 +7,7 @@ import scipy.linalg as sl
 from hidden.optimize.results import LikelihoodOptimizationResult
 from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
 from hidden.filters import bayesian
+from hidden import infer
 
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
@@ -165,7 +166,7 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
 
 
 class EMOptimizer(CompleteLikelihoodOptimizer):
-    def __init__(self):
+    def __init__(self, *args):
         pass
 
     @staticmethod
@@ -245,7 +246,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         gamma_mat = np.zeros((bayes.shape[1], bayes.shape[1], len(obs_ts)))
 
         for i, obs in enumerate(obs_ts):
-            gamma_mat[:, :, i] = EMOptimizer._get_gamma_num(obs, i, bayes)
+            gamma_mat[:, :, i] = EMOptimizer._gamma_numer(obs, i, bayes)
         gamma_denom = np.vstack([bayes.T, bayes.T]).reshape(gamma_mat.shape)
 
         return (gamma_mat.sum(axis=2) / gamma_denom.sum(axis=2))
@@ -255,16 +256,17 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         obs_ts: np.ndarray
     ):
         # Expectation step: calculate quantities
-        alpha_ts = self.analyzer.alpha(obs_ts, trans_matrix, obs_matrix, norm=True)
-        beta_ts = self.analyzer.beta(obs_ts, trans_matrix, obs_matrix, norm=True)
-        bayes_ts = self.analyzer.bayesian_smooth(obs_ts, trans_matrix, obs_matrix)
+        self.analyzer.alpha(obs_ts, trans_matrix, obs_matrix, norm=True)
+        self.analyzer.beta(obs_ts, trans_matrix, obs_matrix, norm=True)
+        self.analyzer.bayesian_smooth(obs_ts, trans_matrix, obs_matrix)
 
         # Maximization step: update matrices
         trans_matrix_updated = EMOptimizer._update_transition_matrix(
-            obs_ts, trans_matrix, obs_matrix, alpha_ts, beta_ts, bayes_ts
+            obs_ts, trans_matrix, obs_matrix, self.analyzer.alpha_tracker,
+            self.analyzer.beta_tracker, self.analyzer.bayes_smooth
         )
         obs_matrix_updated = EMOptimizer._update_observation_matrix(
-            obs_ts, bayes_ts
+            obs_ts, self.analyzer.bayes_smooth
         )
 
         return trans_matrix_updated, obs_matrix_updated
