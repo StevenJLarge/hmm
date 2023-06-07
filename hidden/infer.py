@@ -160,6 +160,7 @@ if __name__ == "__main__":
     res_glo = BayesInfer.optimize(
         obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global
     )
+    res_bw = BayesInfer.optimize(obs_ts, A_init, B_init, opt_type=OptClass.ExpMax)
     # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 
     print("--DONE--")

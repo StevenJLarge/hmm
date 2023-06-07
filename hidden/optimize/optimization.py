@@ -4,7 +4,7 @@ import numpy as np
 import scipy.optimize as so
 import scipy.linalg as sl
 
-from hidden.optimize.results import LikelihoodOptimizationResult
+from hidden.optimize.results import LikelihoodOptimizationResult, EMOptimizationResult
 from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
 from hidden.filters import bayesian
 from hidden import infer
@@ -167,6 +167,7 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
 
 class EMOptimizer(CompleteLikelihoodOptimizer):
     def __init__(self, *args):
+        # Add threshold, maxiter ect. to constructor here
         pass
 
     @staticmethod
@@ -278,7 +279,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         maxiter: Optional[int] = 5000,
         tracking: Optional[Union[bool, int]] = False,
         tracking_interval: Optional[int] = 100
-    ):
+    ) -> EMOptimizationResult:
 
         obs_ts = np.array(obs_ts)
         self.analyzer = infer.MarkovInfer(
@@ -309,7 +310,17 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
                 obs_mat_tracker.append(obs_matrix)
             iter_count += 1
 
-        return trans_matrix, obs_matrix
+        meta_dict = {}
+        if tracking:
+            meta_dict = {
+                "trans_tracker": trans_mat_tracker,
+                "obs_tracker": obs_mat_tracker
+            }
+
+        return EMOptimizationResult(
+            trans_matrix, obs_matrix, update_tracker, iter_count,
+            metadata=meta_dict
+        )
 
 
 if __name__ == "__main__":
