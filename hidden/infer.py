@@ -116,8 +116,8 @@ class MarkovInfer:
         return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
     def optimize(
-        self, observations, trans_init: np.ndarray, obs_init: np.ndarray,
-        symmetric: Optional[bool] = False,
+        self, observations: Iterable, trans_init: np.ndarray,
+        obs_init: np.ndarray, symmetric: Optional[bool] = False,
         opt_type: Optional[OptClass] = OptClass.Local,
         algo_opts: Optional[Dict] = {}
     ) -> OptimizationResult:
@@ -160,6 +160,7 @@ if __name__ == "__main__":
     res_glo = BayesInfer.optimize(
         obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global
     )
+    res_bw = BayesInfer.optimize(obs_ts, A_init, B_init, opt_type=OptClass.ExpMax)
     # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 
     print("--DONE--")
