@@ -143,6 +143,7 @@ class MarkovInfer:
 
 if __name__ == "__main__":
     from hidden import dynamics
+    import time
     hmm = dynamics.HMM(2, 2)
     hmm.init_uniform_cycle()
     hmm.run_dynamics(1000)
@@ -166,10 +167,18 @@ if __name__ == "__main__":
     res_glo = BayesInfer.optimize(
         obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global
     )
+
+    start_bw = time.time()
     res_bw = BayesInfer.optimize(
         obs_ts, A_init, B_init, opt_type=OptClass.ExpMax,
-        algo_opts={"track_optimization": True, "maxiter": 500}
+        algo_opts={
+            "track_optimization": True, "tracking_interval": 10,
+            "maxiter": 200, "testing": "THIS IS A TEST"
+        }
     )
+    end_bw = time.time()
     # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
+
+    print(f"BW Runtime: {round(end_bw - start_bw, 4)}")
 
     print("--DONE--")
