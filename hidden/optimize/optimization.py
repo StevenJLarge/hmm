@@ -1,4 +1,5 @@
 from typing import Iterable, Tuple, Optional, Union
+import warnings
 from operator import mul
 import numpy as np
 import scipy.optimize as so
@@ -7,7 +8,6 @@ import scipy.linalg as sl
 from hidden.optimize.results import LikelihoodOptimizationResult, EMOptimizationResult
 from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
 from hidden.filters import bayesian
-from hidden import infer
 
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
@@ -166,9 +166,26 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
 
 
 class EMOptimizer(CompleteLikelihoodOptimizer):
-    def __init__(self, *args):
-        # Add threshold, maxiter ect. to constructor here
-        pass
+    def __init__(
+        self, threshold: Optional[float] = 1e-8, maxiter: Optional[int] = 5000,
+        track_optimization: Optional[Union[bool, int]] = False,
+        tracking_interval: Optional[int] = 100,
+        tracking_norm: Optional[str] = 'fro',
+        **kwargs
+    ):
+        if len(kwargs) > 0:
+            warnings.warn(
+                f"Unrecognized optimizer options {kwargs}, proceeding without "
+                "using them. See documentation for valid initialization "
+                "options for EM algorithm...", RuntimeWarning
+            )
+
+        super().__init__()
+        self._opt_threshold = threshold
+        self._max_iter = maxiter
+        self._track = track_optimization
+        self._interval = tracking_interval
+        self._update_norm = tracking_norm
 
     @staticmethod
     def _get_xi_matrix(
@@ -257,42 +274,32 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         obs_ts: np.ndarray
     ):
         # Expectation step: calculate quantities
-        self.analyzer.alpha(obs_ts, trans_matrix, obs_matrix, norm=True)
-        self.analyzer.beta(obs_ts, trans_matrix, obs_matrix, norm=True)
-        self.analyzer.bayesian_smooth(obs_ts, trans_matrix, obs_matrix)
-
+        _alpha = bayesian.alpha_prob(obs_ts, trans_matrix, obs_matrix, norm=True)
+        _beta = bayesian.beta_prob(obs_ts, trans_matrix, obs_matrix, norm=True)
+        _bayes = bayesian.bayes_estimate(obs_ts, trans_matrix, obs_matrix)
+ 
         # Maximization step: update matrices
         trans_matrix_updated = EMOptimizer._update_transition_matrix(
-            obs_ts, trans_matrix, obs_matrix, self.analyzer.alpha_tracker,
-            self.analyzer.beta_tracker, self.analyzer.bayes_smooth
+            obs_ts, trans_matrix, obs_matrix, _alpha, _beta, _bayes
         )
         obs_matrix_updated = EMOptimizer._update_observation_matrix(
-            obs_ts, self.analyzer.bayes_smooth
+            obs_ts, _bayes
         )
 
         return trans_matrix_updated, obs_matrix_updated
 
     def optimize(
         self, obs_ts: np.ndarray, trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray, symmetric: Optional[bool] = False,
-        norm: Optional[str] = 'fro', threshold: Optional[float] = 1e-8,
-        maxiter: Optional[int] = 5000,
-        tracking: Optional[Union[bool, int]] = False,
-        tracking_interval: Optional[int] = 100
+        obs_matrix: np.ndarray
     ) -> EMOptimizationResult:
-
-        obs_ts = np.array(obs_ts)
-        self.analyzer = infer.MarkovInfer(
-            trans_matrix.shape[0], obs_matrix.shape[0]
-        )
         iter_count = 0
-        update_size = threshold + 1
+        update_size = self._opt_threshold + 1
         update_tracker = []
-        if tracking:
+        if self._track:
             trans_mat_tracker = []
             obs_mat_tracker = []
 
-        while update_size > threshold and iter_count < maxiter:
+        while update_size > self._opt_threshold and iter_count < self._max_iter:
             prev_trans, prev_obs = trans_matrix, obs_matrix
 
             trans_matrix, obs_matrix = self.baum_welch_step(
@@ -300,18 +307,18 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             )
 
             update_size = np.max(
-                [sl.norm(prev_trans - trans_matrix, ord=norm),
-                sl.norm(prev_obs - obs_matrix, ord=norm)]
+                [sl.norm(prev_trans - trans_matrix, ord=self._update_norm),
+                sl.norm(prev_obs - obs_matrix, ord=self._update_norm)]
             )
             update_tracker.append(update_size)
 
-            if tracking and (iter_count % tracking_interval == 0):
+            if self._track and (iter_count % self._interval == 0):
                 trans_mat_tracker.append(trans_matrix)
                 obs_mat_tracker.append(obs_matrix)
             iter_count += 1
 
         meta_dict = {}
-        if tracking:
+        if self._track:
             meta_dict = {
                 "trans_tracker": trans_mat_tracker,
                 "obs_tracker": obs_mat_tracker
@@ -381,8 +388,8 @@ if __name__ == "__main__":
     end_new_sym = time.time()
 
     start_new_em = time.time()
-    # res_em = opt_em.optimize(obs_ts, A_test, B_test)
-    res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
+    res_em = opt_em.optimize(obs_ts, A_test, B_test, analyzer)
+    # res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
     end_new_em = time.time()
 
     print(f"Time Leg    : {end_leg - start_leg}")

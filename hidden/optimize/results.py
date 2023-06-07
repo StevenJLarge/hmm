@@ -48,7 +48,7 @@ class LikelihoodOptimizationResult(OptimizationResult):
             "obs_matrix_opt": self.B_opt,
             "final_likelihood": self.likelihood,
             "success": self.success,
-            "metadata": self.metadata
+            "metadata": list(self.metadata.keys())
         }
         return self._report
 
@@ -59,7 +59,7 @@ class EMOptimizationResult(OptimizationResult):
         iteration_count: int, metadata: Optional[Dict] = {}
     ):
         super().__init__(True, "baum-welch")
-        self._changes = change_tracker
+        self.update_size_tracking = change_tracker
         self._iterations = iteration_count
         self.A = A_opt
         self.B = B_opt
@@ -67,11 +67,11 @@ class EMOptimizationResult(OptimizationResult):
 
     def package_results(self) -> Dict:
         self._report = {
-            "trans_matrix_opt": self.A_opt,
-            "obs_matrix_opt": self.B_opt,
+            "trans_matrix_opt": self.A,
+            "obs_matrix_opt": self.B,
             "iterations": self._iterations,
-            "final_iteration_norm": self.changes[-1],
+            "final_iteration_norm": self.update_size_tracking[-1],
             "success": True,
-            "metadata": self.metadata
+            "metadata": list(self.metadata.keys())
         }
         return self._report
