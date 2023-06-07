@@ -65,7 +65,6 @@ class MarkovInfer:
         obs_matrix: np.ndarray,
     ):
         observations = self._validate_input(observations)
-        # This is now just an interface for the filter/bayesian methods
         self.forward_tracker, self.prediction_tracker = bayesian.forward_algo(
             observations, trans_matrix, obs_matrix
         )
@@ -126,12 +125,19 @@ class MarkovInfer:
                 'Invalid `opt_class`, must be a member of OptClass enum...'
             )
         observations = self._validate_input(observations)
-        # For the global optimizer, I need n_params, dim_tuple, and
+        # For the global optimizer, dim_tuple, but no initial guesses
         optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
         if (opt_type is OptClass.Global):
+            print("Running global partial-data likelihood optimization...")
             dim_tuple = (trans_init.shape, obs_init.shape)
-            return optimizer.optimize(observations, dim_tuple, symmetric=symmetric)
+            return optimizer.optimize(observations, dim_tuple, symmetric)
 
+        # For EM opt, there is no option to input a symmetric constraint
+        elif (opt_type is OptClass.ExpMax):
+            print("Running Baum-Welch (EM) optimization...")
+            return optimizer.optimize(observations, trans_init, obs_init)
+
+        print("Running local partial-data likelihood optimization...")
         return optimizer.optimize(observations, trans_init, obs_init, symmetric)
 
 
@@ -151,16 +157,19 @@ if __name__ == "__main__":
 
     BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
     BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
-    BayesInfer.bayesian_smooth(hmm.A)
+    BayesInfer.bayesian_smooth(obs_ts, hmm.A, hmm.B)
 
-    BayesInfer.alpha(hmm.A, hmm.B, obs_ts)
-    BayesInfer.beta(hmm.A, hmm.B, obs_ts)
+    BayesInfer.alpha(obs_ts, hmm.A, hmm.B)
+    BayesInfer.beta(obs_ts, hmm.A, hmm.B)
 
     res_loc = BayesInfer.optimize(obs_ts, A_init, B_init, symmetric=True)
     res_glo = BayesInfer.optimize(
         obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global
     )
-    res_bw = BayesInfer.optimize(obs_ts, A_init, B_init, opt_type=OptClass.ExpMax)
+    res_bw = BayesInfer.optimize(
+        obs_ts, A_init, B_init, opt_type=OptClass.ExpMax,
+        algo_opts={"track_optimization": True, "maxiter": 500}
+    )
     # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
 
     print("--DONE--")
