@@ -389,7 +389,7 @@ if __name__ == "__main__":
 
     start_new_em = time.time()
     res_em = opt_em.optimize(obs_ts, A_test, B_test, analyzer)
-    # res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
+    res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
     end_new_em = time.time()
 
     print(f"Time Leg    : {end_leg - start_leg}")
