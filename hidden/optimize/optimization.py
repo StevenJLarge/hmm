@@ -188,7 +188,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         self._update_norm = tracking_norm
 
     @staticmethod
-    def _get_xi_matrix(
+    def _xi_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
     ):
@@ -198,6 +198,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         for t in range(1, len(obs_ts)):
             xi[:, :, t - 1] = (
                 trans_matrix
+                # Change vstack -> repeat
                 * np.vstack([obs_matrix[:, obs_ts[t]], obs_matrix[:, obs_ts[t]]]).T
                 * np.outer(
                     beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
@@ -207,15 +208,64 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return xi
 
     @staticmethod
-    def _get_denom_matrix(
-            obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
-            alpha_norm: np.ndarray, beta_norm: np.ndarray
-        ):
+    def _xi_matrix_alt(
+        obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
+    ):
+        # Declare xi array (joint probability numerator)
+        _shape = trans_matrix.shape
+        xi = np.zeros((*_shape, len(obs_ts) - 1))
+
+        for t in range(1, len(obs_ts)):
+            xi[:, :, t - 1] = (
+                trans_matrix
+                # Change vstack -> repeat
+                # * np.vstack([obs_matrix[:, obs_ts[t]], obs_matrix[:, obs_ts[t]]]).T
+                * np.repeat(obs_matrix[:, obs_ts[t]], 2).reshape(*_shape)
+                * np.outer(
+                    beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
+                )
+            )
+
+        return xi
+
+    @staticmethod
+    def _xi_matrix(
+        obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
+    ):
+        # Consolidated routine to calcualte ratio directly
+        _shape = trans_matrix.shape
+        xi = np.zeros((*_shape, len(obs_ts) - 1))
+
+        for t in range(1, len(obs_ts)):
+            stacked_obs = np.repeat(obs_matrix[:, obs_ts[t]], 2).reshape(*_shape)
+
+            numer_outer = np.outer(
+                beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
+            )
+            outer_denom = np.outer(
+                beta_norm[t, :], alpha_norm[t, :]
+            )
+
+            numer = trans_matrix * stacked_obs * numer_outer
+            denom = np.sum(trans_matrix, stacked_obs, outer_denom, axis=0)
+
+            xi[:, :, t - 1] = numer / denom
+
+        return xi
+
+    @staticmethod
+    def _xi_matrix_denom(
+        obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        alpha_norm: np.ndarray, beta_norm: np.ndarray
+    ):
         xi_denom = np.zeros((1, trans_matrix.shape[0], len(obs_ts) - 1))
 
         for t in range(1, len(obs_ts)):
             xi_denom[:, :, t-1] = np.sum(
                 trans_matrix
+                # change vstack -> repeat
                 * np.vstack([obs_matrix[:, obs_ts[t]], obs_matrix[:, obs_ts[t]]]).T
                 * np.outer(
                     beta_norm[t, :], alpha_norm[t - 1, :]
@@ -223,6 +273,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             , axis=0)
 
         # And then we sum over the columns
+        # vstack -> repeat
         xi_denom = np.vstack([xi_denom, xi_denom])
 
         return xi_denom
@@ -241,11 +292,11 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray
     ):
-        xi_numer = EMOptimizer._get_xi_matrix(
+        xi_numer = EMOptimizer._xi_matrix(
             obs_ts, trans_matrix, obs_matrix, alpha, beta, bayes
         )
 
-        xi_denom = EMOptimizer._get_denom_matrix(
+        xi_denom = EMOptimizer._xi_matrix_denom(
             obs_ts, trans_matrix, obs_matrix, alpha, beta
         )
 
@@ -332,6 +383,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
 if __name__ == "__main__":
     import time
+    import os
     from hidden import dynamics, infer
     from hidden.optimize.base import OptClass
     # testing routines here, lets work with symmetric ''true' matrices
@@ -388,7 +440,7 @@ if __name__ == "__main__":
     end_new_sym = time.time()
 
     start_new_em = time.time()
-    res_em = opt_em.optimize(obs_ts, A_test, B_test, analyzer)
+    res_em = opt_em.optimize(np.array(obs_ts), A_test, B_test)
     # res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
     end_new_em = time.time()
 
