@@ -193,7 +193,7 @@ def test_xi_matrix_shape(A_matrix, B_matrix):
     n_steps = 100
     hmm = HMM(*A_matrix.shape)
     hmm.run_dynamics(n_steps)
-    obs_ts = hmm.get_obs_ts()
+    obs_ts = np.array(hmm.get_obs_ts())
     opt = optimization.EMOptimizer()
 
     # Act
@@ -209,8 +209,13 @@ def test_xi_matrix_shape(A_matrix, B_matrix):
     assert sample_xi.shape == (hmm.A.shape)
 
 
-def test_gamma_matrix_size():
-    pass
+@pytest.mark.parameterize(['mat_shape'], [(2, 2), (3, 3)])
+def test_gamma_matrix_size(mat_shape):
+    n_steps = 100
+    hmm = HMM(mat_shape)
+    hmm.run_dynamics(n_steps)
+    obs_ts = np.array(hmm.get_obs_ts())
+    
 
 
 def test_forward_filter_normalization():
