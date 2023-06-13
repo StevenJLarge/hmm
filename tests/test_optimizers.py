@@ -2,7 +2,9 @@
 import operator
 import pytest
 import numpy as np
-from hidden.optimize import base
+from hidden.dynamics import HMM
+from hidden.optimize import base, optimization
+from hidden.filters import bayesian
 
 
 A_test_2 = np.array([[0.7, 0.2], [0.3, 0.8]])
@@ -60,7 +62,7 @@ test_data_comp_sym = [
 # IO tests
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_encoding_dimensions(A_matrix, B_matrix):
-    #Arrange
+    # Arrange
     opt = base.TestLikelihoodOptimizer()
 
     # Act
@@ -182,6 +184,29 @@ def test_matrix_decoding_symmetric(A_matrix, B_matrix, compressed):
     # Assert
     assert np.all(np.isclose(A_decode, A_matrix))
     assert np.all(np.isclose(B_decode, B_matrix))
+
+
+# TEST FOR EM ALGORITHM
+@pytest.mark.parametrize(['A_matrix', 'B_Matrix'], test_data)
+def test_xi_matrix_shape(A_matrix, B_matrix):
+    # Arrange
+    n_steps = 100
+    hmm = HMM(*A_matrix.shape)
+    hmm.run_dynamics(n_steps)
+    obs_ts = hmm.get_obs_ts()
+    opt = optimization.EMOptimizer()
+
+    # Act
+    alpha_mat = bayesian.alpha_prob(obs_ts, hmm.A, hmm.B, norm=True)
+    beta_mat = bayesian.beta_prob(obs_ts, hmm.A, hmm.B, norm=True)
+    bayes_mat = bayesian.bayes_estimate(obs_ts, hmm.A, hmm.B)
+
+    sample_xi = opt._get_xi_matrix(
+        hmm.A, hmm.B, obs_ts, alpha_mat, beta_mat, bayes_mat
+    )
+
+    # Assert
+    assert sample_xi.shape == (*hmm.A.shape, n_steps)
 
 
 if __name__ == "__main__":
