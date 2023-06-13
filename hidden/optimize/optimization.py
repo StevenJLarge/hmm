@@ -1,9 +1,12 @@
-from typing import Iterable, Tuple, Optional
+from typing import Iterable, Tuple, Optional, Union
+import warnings
+import numba
 from operator import mul
 import numpy as np
 import scipy.optimize as so
+import scipy.linalg as sl
 
-from hidden.optimize.results import LikelihoodOptimizationResult
+from hidden.optimize.results import LikelihoodOptimizationResult, EMOptimizationResult
 from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
 from hidden.filters import bayesian
 
@@ -164,55 +167,158 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
 
 
 class EMOptimizer(CompleteLikelihoodOptimizer):
-    def __init__(self):
-        pass
+    def __init__(
+        self, threshold: Optional[float] = 1e-8, maxiter: Optional[int] = 5000,
+        track_optimization: Optional[Union[bool, int]] = False,
+        tracking_interval: Optional[int] = 100,
+        tracking_norm: Optional[str] = 'fro',
+        **kwargs
+    ):
+        if len(kwargs) > 0:
+            warnings.warn(
+                f"Unrecognized optimizer options {kwargs}, proceeding without "
+                "using them. See documentation for valid initialization "
+                "options for EM algorithm...", RuntimeWarning
+            )
+
+        super().__init__()
+        self._opt_threshold = threshold
+        self._max_iter = maxiter
+        self._track = track_optimization
+        self._interval = tracking_interval
+        self._update_norm = tracking_norm
 
     @staticmethod
-    def _get_joint_matrix(obs_ts: np.ndarray, A: np.ndarray, B: np.ndarray, bayes: np.ndarray):
-        # I think this is a len - 1? Double check how long the bayes estimator is?
-        xi = np.zeros((*A.shape, len(bayes) - 1))
+    @numba.jit(nopython=True)
+    def xi_matrix(
+        obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
+    ):
+        _shape = trans_matrix.shape
+        xi = np.zeros((*_shape, len(obs_ts) - 1))
 
-        alpha = bayesian.alpha_prob(obs_ts, A, B)
-        beta = bayesian.beta_prob(obs_ts, A, B)
-
-        for i, (_alp, _bet, _p) in enumerate(zip(alpha[:-1], beta[1:], bayes[:-1])):
-            numer_mat = np.outer(_bet, _alp) * A
-            denom_vec = np.repeat(
-                numer_mat.sum(axis=1).reshape(A.shape[0], 1),
-                A.shape[0], axis=1
+        for t in range(1, len(obs_ts)):
+            stacked_obs = np.repeat(obs_matrix[:, obs_ts[t]], 2).reshape(*_shape)
+ 
+            numer_outer = np.outer(
+                beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
             )
-            bayes_mat = np.repeat(
-                _p.reshape(A.shape[0], 1),
-                A.shape[0], axis=1
+            outer_denom = np.outer(
+                beta_norm[t, :], alpha_norm[t - 1, :]
             )
-            xi[:, :, i] = (numer_mat / denom_vec) * bayes_mat
-        # Could potentially perform the summation before returning the array here?
-        return xi
 
-    def _update_A_matrix(
-        self, obs_ts: Iterable, A: np.ndarray, B: np.ndarray, bayes: np.ndarray
-    ) -> np.ndarray:
-        joint_prob = self._get_joint_matrix(obs_ts, A, B, bayes)
-        # Denominator
-        A_new = joint_prob.sum(axis=2)
-        return A_new
+            numer = trans_matrix * stacked_obs * numer_outer
+            denom = np.sum(trans_matrix * stacked_obs * outer_denom, axis=0)
 
-    def _update_B_matrix(self, obs_ts: np.ndarray, bayes: np.ndarray):
-        numer_mat = np.zeros((bayes.shape[0], bayes.shape[0], obs_ts.shape))
-        return numer_mat
+            xi[:, :, t - 1] = numer / denom
 
-    def optimize(self, obs_ts, A, B):
-        obs_ts = np.array(obs_ts)
+        return xi.sum(axis=2)
 
-        bayes = bayesian.bayes_estimate(obs_ts, A, B)
-        A_new = self._update_A_matrix(obs_ts, A, B, bayes)
-        B_new = self._update_B_matrix(obs_ts, bayes)
-        return A_new, B_new
+    @staticmethod
+    def _gamma_numer(obs: int, t: int, bayes: np.ndarray):
+        # NOTE this must be vectorizable...
+        obs_num = np.zeros((bayes.shape[1], bayes.shape[1]))
+
+        target_row = obs
+        obs_num[target_row] = bayes[t, :]
+        return obs_num
+
+    @staticmethod
+    # @numba.jit(nopython=True)
+    def _update_transition_matrix(
+        obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray
+    ):
+        ratio = EMOptimizer.xi_matrix(
+            obs_ts, trans_matrix, obs_matrix, alpha, beta, bayes
+        )
+
+        bayes_matrix = np.repeat(
+            (1 / bayes[:-1, :].sum(axis=0)).reshape(1, trans_matrix.shape[0]),
+            trans_matrix.shape[1],
+            axis=0
+        )
+
+        trans_matrix_updated = ratio * bayes_matrix
+        return trans_matrix_updated
+
+    @staticmethod
+    def _update_observation_matrix(obs_ts: np.ndarray, bayes: np.ndarray):
+        # This is almost certainly vectorizable, but I cant think of how to do it ATM...
+        gamma_mat = np.zeros((bayes.shape[1], bayes.shape[1], len(obs_ts)))
+
+        for i, obs in enumerate(obs_ts):
+            gamma_mat[:, :, i] = EMOptimizer._gamma_numer(obs, i, bayes)
+        gamma_denom = np.vstack([bayes.T, bayes.T]).reshape(gamma_mat.shape)
+
+        return (gamma_mat.sum(axis=2) / gamma_denom.sum(axis=2))
+
+    def baum_welch_step(
+        self, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+        obs_ts: np.ndarray
+    ):
+        # Expectation step: calculate quantities
+        _alpha = bayesian.alpha_prob(obs_ts, trans_matrix, obs_matrix, norm=True)
+        _beta = bayesian.beta_prob(obs_ts, trans_matrix, obs_matrix, norm=True)
+        _bayes = bayesian.bayes_estimate(obs_ts, trans_matrix, obs_matrix)
+ 
+        # Maximization step: update matrices
+        trans_matrix_updated = EMOptimizer._update_transition_matrix(
+            obs_ts, trans_matrix, obs_matrix, _alpha, _beta, _bayes
+        )
+        obs_matrix_updated = EMOptimizer._update_observation_matrix(
+            obs_ts, _bayes
+        )
+
+        return trans_matrix_updated, obs_matrix_updated
+
+    def optimize(
+        self, obs_ts: np.ndarray, trans_matrix: np.ndarray,
+        obs_matrix: np.ndarray
+    ) -> EMOptimizationResult:
+        iter_count = 0
+        update_size = self._opt_threshold + 1
+        update_tracker = []
+        if self._track:
+            trans_mat_tracker = []
+            obs_mat_tracker = []
+
+        while update_size > self._opt_threshold and iter_count < self._max_iter:
+            prev_trans, prev_obs = trans_matrix, obs_matrix
+
+            trans_matrix, obs_matrix = self.baum_welch_step(
+                trans_matrix, obs_matrix, obs_ts
+            )
+
+            update_size = np.max(
+                [sl.norm(prev_trans - trans_matrix, ord=self._update_norm),
+                sl.norm(prev_obs - obs_matrix, ord=self._update_norm)]
+            )
+            update_tracker.append(update_size)
+
+            if self._track and (iter_count % self._interval == 0):
+                trans_mat_tracker.append(trans_matrix)
+                obs_mat_tracker.append(obs_matrix)
+            iter_count += 1
+
+        meta_dict = {}
+        if self._track:
+            meta_dict = {
+                "trans_tracker": trans_mat_tracker,
+                "obs_tracker": obs_mat_tracker
+            }
+
+        return EMOptimizationResult(
+            trans_matrix, obs_matrix, update_tracker, iter_count,
+            metadata=meta_dict
+        )
 
 
 if __name__ == "__main__":
     import time
+    import os
     from hidden import dynamics, infer
+    from hidden.optimize.base import OptClass
     # testing routines here, lets work with symmetric ''true' matrices
     A = np.array([
         [0.7, 0.3],
@@ -267,7 +373,8 @@ if __name__ == "__main__":
     end_new_sym = time.time()
 
     start_new_em = time.time()
-    res_em = opt_em.optimize(obs_ts, A_test, B_test)
+    res_em = opt_em.optimize(np.array(obs_ts), A_test, B_test)
+    # res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
     end_new_em = time.time()
 
     print(f"Time Leg    : {end_leg - start_leg}")

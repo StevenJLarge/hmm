@@ -1,10 +1,10 @@
 # Bayesian filters -- Fowrward, backward, bayesian
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Optional
 import numpy as np
 import numba
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def bayes_estimate(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
@@ -21,22 +21,21 @@ def bayes_estimate(
         np.ndarray: array with each row representing the inferred probability
         distribution over individual states
     """
-    # For this we dont make use of the predictions
-    fwd_tracker, _ = forward_algo(obs_ts, trans_matrix, obs_matrix)
-    N = trans_matrix.shape[0]
-    bayes_smooth = np.zeros((len(obs_ts), trans_matrix.shape[0]), dtype=float)
-    bayes_smooth[-1, :] = fwd_tracker[-1, :]
-    _trans_matrix = trans_matrix.T.copy()
-    _fwd_cont = np.ascontiguousarray(fwd_tracker[-2::-1, :])
+    fwd_tracker, pred = forward_algo(obs_ts, trans_matrix, obs_matrix)
 
-    for i in range(_fwd_cont.shape[0]):
-        _filt = _fwd_cont[i, :]
-        _bayes = bayes_smooth[-(i + 1), :]
-        pred = _trans_matrix @ _filt
-        summand = np.array(
-            [np.sum(_bayes * trans_matrix[:, j] / pred) for j in range(N)]
-        )
-        bayes_smooth[-(i + 2), :] = _filt * summand
+    bayes_smooth = np.zeros((len(obs_ts), trans_matrix.shape[1]), dtype=float)
+    bayes_smooth[-1, :] = fwd_tracker[-1, :]
+    ratio = np.zeros(trans_matrix.shape)
+
+    # Iterate backwards through the forward tracker from N-1 -> 1
+    for i in range(fwd_tracker.shape[0] - 1, 0, -1):
+        # Ratio of previous bayesian estimates to forward predictions, shaped
+        # to match trans_matrix shape
+        ratio[:, :] = (bayes_smooth[i, :] / pred[i, :]).reshape(-1, 1)
+        # summation term
+        summand = np.sum(trans_matrix * ratio, axis=0)
+        # Smoothed bayesian estimate
+        bayes_smooth[i - 1, :] = fwd_tracker[i - 1, :] * summand
 
     return bayes_smooth
 
@@ -158,7 +157,8 @@ def _backward_filter(
 
 # @numba.jit(nopython=True)
 def alpha_prob(
-    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
+    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+    norm: Optional[bool] = False
 ) -> np.ndarray:
     """routine to calculate the alpha function P(y^t | x_t ) for all obserations
 
@@ -176,14 +176,25 @@ def alpha_prob(
     alpha = obs_matrix[:, obs_ts[0]].copy()
     alpha_tracker[0, :] = alpha
     for i, obs in enumerate(obs_ts[1:]):
-        alpha = (trans_matrix @ alpha) * obs_matrix[:, obs]
+        alpha = (trans_matrix @ alpha) * obs_matrix[obs, :]
         alpha_tracker[i + 1, :] = alpha
+    if norm:
+        alpha_tracker = (
+            alpha_tracker / np.repeat(
+                alpha_tracker
+                .sum(axis=1)
+                .reshape(-1, 1),
+                alpha_tracker.shape[1]
+            ).reshape(alpha_tracker.shape)
+        )
+
     return alpha_tracker
 
 
 # @numba.jit(nopython=True)
 def beta_prob(
-    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
+    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+    norm: Optional[bool] = False
 ) -> np.ndarray:
     """routine to calculate the beta function P(y^[t: T] | x_t ) for all obserations
 
@@ -203,6 +214,15 @@ def beta_prob(
     for i, obs in enumerate(obs_ts[-1:0:-1]):
         beta = trans_matrix.T @ (beta * obs_matrix[:, obs])
         beta_tracker[i + 1, :] = beta
+    if norm:
+        beta_tracker = (
+            beta_tracker / np.repeat(
+                beta_tracker
+                .sum(axis=1)
+                .reshape(-1, 1),
+                beta_tracker.shape[1]
+            ).reshape(beta_tracker.shape)
+        )
     return beta_tracker[::-1]
 
 
@@ -215,41 +235,25 @@ if __name__ == "__main__":
     hmm = HMM(2, 2)
     hmm.init_uniform_cycle()
 
-    hmm.run_dynamics(500)
+    hmm.run_dynamics(5)
     obs_ts, state_ts = hmm.get_obs_ts(), hmm.get_state_ts()
+
+    A_perturb = np.array([
+        [-0.05, 0.04],
+        [0.05, -0.04]
+    ])
+
+    A_sample = hmm.A + A_perturb
+    B_sample = hmm.B + A_perturb
 
     analyzer = MarkovInfer(2, 2)
 
-    # Current implementations
-    # analyzer.forward_algo(obs_ts, hmm.A, hmm.B, prediction_tracker=True)
-    # analyzer.backward_algo(obs_ts, hmm.A, hmm.B, prediction_tracker=True)
-    # analyzer.bayesian_smooth(hmm.A)
-    # analyzer.alpha(hmm.A, hmm.B, obs_ts)
-    # analyzer.beta(hmm.A, hmm.B, obs_ts)
-
-    # fwd_tracker = analyzer.forward_tracker
-    # bck_tracker = analyzer.backward_tracker
-    # bayes_tracker = analyzer.bayes_smoother
-    # alpha = analyzer.alpha_tracker
-    # beta = analyzer.beta_tracker
-
-    # Filter file implementations
     start_1 = time.time()
-    fwd_tracker_alt, _ = forward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    bck_tracker_alt, _ = backward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    bayes_tracker_alt = bayes_estimate(np.array(obs_ts), hmm.A, hmm.B)
-    alpha_alt = alpha_prob(np.array(obs_ts), hmm.A, hmm.B)
-    beta_alt = beta_prob(np.array(obs_ts), hmm.A, hmm.B)
+    est_bayes_1 = bayes_estimate(np.array(obs_ts), A_sample, B_sample)
     end_1 = time.time()
 
-    # Second repetition is much faster
-
     start_2 = time.time()
-    fwd_tracker_alt, _ = forward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    bck_tracker_alt, _ = backward_algo(np.array(obs_ts), hmm.A, hmm.B)
-    bayes_tracker_alt = bayes_estimate(np.array(obs_ts), hmm.A, hmm.B)
-    alpha_alt = alpha_prob(np.array(obs_ts), hmm.A, hmm.B)
-    beta_alt = beta_prob(np.array(obs_ts), hmm.A, hmm.B)
+    est_bayes_1 = bayes_estimate(np.array(obs_ts), A_sample, B_sample)
     end_2 = time.time()
 
     print("----- Timer results -----")
