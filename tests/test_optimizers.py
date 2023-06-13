@@ -201,12 +201,36 @@ def test_xi_matrix_shape(A_matrix, B_matrix):
     beta_mat = bayesian.beta_prob(obs_ts, hmm.A, hmm.B, norm=True)
     bayes_mat = bayesian.bayes_estimate(obs_ts, hmm.A, hmm.B)
 
-    sample_xi = opt._get_xi_matrix(
+    sample_xi = opt.xi_matrix(
         hmm.A, hmm.B, obs_ts, alpha_mat, beta_mat, bayes_mat
     )
 
     # Assert
-    assert sample_xi.shape == (*hmm.A.shape, n_steps)
+    assert sample_xi.shape == (hmm.A.shape)
+
+
+def test_gamma_matrix_size():
+    pass
+
+
+def test_forward_filter_normalization():
+    pass
+
+
+def test_backward_filter_normalization():
+    pass
+
+
+def test_bayes_filter_normalization():
+    pass
+
+
+def test_bw_update_preserves_A_matrix_normalization():
+    pass
+
+
+def test_bw_update_preserves_B_matrix_normalization():
+    pass
 
 
 if __name__ == "__main__":
