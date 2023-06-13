@@ -1,5 +1,6 @@
 from typing import Iterable, Tuple, Optional, Union
 import warnings
+import numba
 from operator import mul
 import numpy as np
 import scipy.optimize as so
@@ -188,44 +189,30 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         self._update_norm = tracking_norm
 
     @staticmethod
-    def _get_xi_matrix(
+    @numba.jit(nopython=True)
+    def xi_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
     ):
-        # Declare xi array (joint probability numerator)
-        xi = np.zeros((*trans_matrix.shape, len(obs_ts) - 1))
+        _shape = trans_matrix.shape
+        xi = np.zeros((*_shape, len(obs_ts) - 1))
 
         for t in range(1, len(obs_ts)):
-            xi[:, :, t - 1] = (
-                trans_matrix
-                * np.vstack([obs_matrix[:, obs_ts[t]], obs_matrix[:, obs_ts[t]]]).T
-                * np.outer(
-                    beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
-                )
+            stacked_obs = np.repeat(obs_matrix[:, obs_ts[t]], 2).reshape(*_shape)
+ 
+            numer_outer = np.outer(
+                beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
+            )
+            outer_denom = np.outer(
+                beta_norm[t, :], alpha_norm[t - 1, :]
             )
 
-        return xi
+            numer = trans_matrix * stacked_obs * numer_outer
+            denom = np.sum(trans_matrix * stacked_obs * outer_denom, axis=0)
 
-    @staticmethod
-    def _get_denom_matrix(
-            obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
-            alpha_norm: np.ndarray, beta_norm: np.ndarray
-        ):
-        xi_denom = np.zeros((1, trans_matrix.shape[0], len(obs_ts) - 1))
+            xi[:, :, t - 1] = numer / denom
 
-        for t in range(1, len(obs_ts)):
-            xi_denom[:, :, t-1] = np.sum(
-                trans_matrix
-                * np.vstack([obs_matrix[:, obs_ts[t]], obs_matrix[:, obs_ts[t]]]).T
-                * np.outer(
-                    beta_norm[t, :], alpha_norm[t - 1, :]
-                )
-            , axis=0)
-
-        # And then we sum over the columns
-        xi_denom = np.vstack([xi_denom, xi_denom])
-
-        return xi_denom
+        return xi.sum(axis=2)
 
     @staticmethod
     def _gamma_numer(obs: int, t: int, bayes: np.ndarray):
@@ -237,30 +224,27 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return obs_num
 
     @staticmethod
+    # @numba.jit(nopython=True)
     def _update_transition_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray
     ):
-        xi_numer = EMOptimizer._get_xi_matrix(
+        ratio = EMOptimizer.xi_matrix(
             obs_ts, trans_matrix, obs_matrix, alpha, beta, bayes
         )
 
-        xi_denom = EMOptimizer._get_denom_matrix(
-            obs_ts, trans_matrix, obs_matrix, alpha, beta
-        )
-
-        ratio = xi_numer / xi_denom
         bayes_matrix = np.repeat(
             (1 / bayes[:-1, :].sum(axis=0)).reshape(1, trans_matrix.shape[0]),
             trans_matrix.shape[1],
             axis=0
         )
 
-        trans_matrix_updated = np.sum(ratio, axis=2) * bayes_matrix
+        trans_matrix_updated = ratio * bayes_matrix
         return trans_matrix_updated
 
     @staticmethod
     def _update_observation_matrix(obs_ts: np.ndarray, bayes: np.ndarray):
+        # This is almost certainly vectorizable, but I cant think of how to do it ATM...
         gamma_mat = np.zeros((bayes.shape[1], bayes.shape[1], len(obs_ts)))
 
         for i, obs in enumerate(obs_ts):
@@ -332,6 +316,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
 if __name__ == "__main__":
     import time
+    import os
     from hidden import dynamics, infer
     from hidden.optimize.base import OptClass
     # testing routines here, lets work with symmetric ''true' matrices
@@ -388,7 +373,7 @@ if __name__ == "__main__":
     end_new_sym = time.time()
 
     start_new_em = time.time()
-    res_em = opt_em.optimize(obs_ts, A_test, B_test, analyzer)
+    res_em = opt_em.optimize(np.array(obs_ts), A_test, B_test)
     # res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
     end_new_em = time.time()
 

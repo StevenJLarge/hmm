@@ -4,7 +4,7 @@ import numpy as np
 import numba
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def bayes_estimate(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
