@@ -27,7 +27,7 @@ class MarkovInfer:
 
         Args:
             dim_sys (int): Dimension of the number of states in a hidden system
-            dim_obs (int): NUmber of possible observations
+            dim_obs (int): Number of possible observations
         """
         # Tracker lists for forward and backward estimates
         self.forward_tracker = None
