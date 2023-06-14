@@ -57,7 +57,7 @@ class MarkovInfer:
             NotImplementedError: Input data type is not supported
 
         Returns:
-            _type_: _description_
+            np.ndarray: npmy-converted observation
         """
         # We want this to support input lists as well as pandas Series
         if isinstance(obs_ts, np.ndarray):
