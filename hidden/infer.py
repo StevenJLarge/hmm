@@ -163,7 +163,7 @@ class MarkovInfer:
     ) -> None:
         """Wrapper routine to interface with bayesian smoothing routine. Sets
         to internal bayes_smooth instance variable
-
+        
         Args:
             observations (np.ndarray): timeseries of observations
             trans_matrix (np.ndarray): transition matrix
