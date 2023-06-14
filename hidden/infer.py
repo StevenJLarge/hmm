@@ -1,7 +1,6 @@
 # File to contain the class definitions and routines for inferring the
 # properties of the HMM
-from typing import Iterable, Optional, Tuple, Dict
-from operator import mul
+from typing import Iterable, Optional, Dict
 import numpy as np
 from pandas import DataFrame, Series
 from hidden.optimize.registry import OPTIMIZER_REGISTRY
@@ -22,7 +21,14 @@ class MarkovInfer:
     n_sys: int
     n_obs: int
  
-    def __init__(self, dim_sys: int, dim_obs: int):
+    def __init__(self, dim_sys: int, dim_obs: int) -> None:
+        """Constructor for MarkovInfer class, this generally acts as an
+        interface/wrapper for the optimization and filtering routines
+
+        Args:
+            dim_sys (int): Dimension of the number of states in a hidden system
+            dim_obs (int): Number of possible observations
+        """
         # Tracker lists for forward and backward estimates
         self.forward_tracker = None
         self.backward_tracker = None
@@ -37,7 +43,22 @@ class MarkovInfer:
         self.n_obs = dim_obs
 
     @staticmethod
-    def _validate_input(obs_ts):
+    def _validate_input(obs_ts: Iterable) -> np.ndarray:
+        """Routine to validate input for observation timeseries. This will cast
+        lists, and pandas Series/DataFrme to a 1-d numpy array, for use in the
+        lower-level (numba-optimized) filter routines
+
+        Args:
+            obs_ts (Iterable): timeseries of observations
+
+        Raises:
+            ValueError: Observations (numpy) cannot be interpreted as 1D
+            ValueError: Observations (pandas) cannot be interpreted as 1D
+            NotImplementedError: Input data type is not supported
+
+        Returns:
+            np.ndarray: npmy-converted observation
+        """
         # We want this to support input lists as well as pandas Series
         if isinstance(obs_ts, np.ndarray):
             if 1 in obs_ts.shape or len(obs_ts.shape) == 1:
@@ -63,7 +84,15 @@ class MarkovInfer:
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
-    ):
+    ) -> None:
+        """Wrapper routine to implement the forward filter algorithm, and write
+        results to internal forward_tracker and prediction_tracker variables
+
+        Args:
+            observations (Iterable[int]): observation timeseries
+            trans_matrix (np.ndarray): transition matrix
+            obs_matrix (np.ndarray): observation matrix
+        """
         observations = self._validate_input(observations)
         self.forward_tracker, self.prediction_tracker = bayesian.forward_algo(
             observations, trans_matrix, obs_matrix
@@ -74,7 +103,15 @@ class MarkovInfer:
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
-    ):
+    ) -> None:
+        """Wrapper routine to implement the backward filter algorithm, and write
+        results to internal backward_tracker and prediction_back variables
+
+        Args:
+            observations (Iterable[int]): observation timeseries
+            trans_matrix (np.ndarray): transition matrix
+            obs_matrix (np.ndarray): observation matrix
+        """
         observations = self._validate_input(observations)
         self.backward_tracker, self.predictions_back = bayesian.backward_algo(
             observations, trans_matrix, obs_matrix
@@ -83,7 +120,18 @@ class MarkovInfer:
     def alpha(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray, norm: Optional[bool] = False
-    ):
+    ) -> None:
+        """Wrapper routine to interface with alpha-calcualtion routine. Sets to
+        internal alpha_tracker instance variable
+
+        Args:
+            observations (np.ndarray): timeseries of observations
+            trans_matrix (np.ndarray): transition matrix
+            obs_matrix (np.ndarray): observation matrix
+            norm (Optional[bool], optional): whether or not there we want to
+                use normalized (across states) at each point in time.
+                Defaults to False.
+        """
         observations = self._validate_input(observations)
         self.alpha_tracker = bayesian.alpha_prob(
             observations, trans_matrix, obs_matrix, norm=norm
@@ -91,8 +139,19 @@ class MarkovInfer:
 
     def beta(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray, norm: Optional[bool] = True
-    ):
+        obs_matrix: np.ndarray, norm: Optional[bool] = False
+    ) -> None:
+        """Wrapper routine to interface with beta-calcualtion routine. Sets to
+        internal beta_tracker instance variable
+
+        Args:
+            observations (np.ndarray): timeseries of observations
+            trans_matrix (np.ndarray): transition matrix
+            obs_matrix (np.ndarray): observation matrix
+            norm (Optional[bool], optional): whether or not there we want to
+                use normalized (across states) at each point in time.
+                Defaults to False.
+        """
         observations = self._validate_input(observations)
         self.beta_tracker = bayesian.beta_prob(
             observations, trans_matrix, obs_matrix, norm=norm
@@ -101,17 +160,47 @@ class MarkovInfer:
     def bayesian_smooth(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
-    ):
+    ) -> None:
+        """Wrapper routine to interface with bayesian smoothing routine. Sets
+        to internal bayes_smooth instance variable
+        
+        Args:
+            observations (np.ndarray): timeseries of observations
+            trans_matrix (np.ndarray): transition matrix
+            obs_matrix (np.ndarray): observation matrix
+        """
         observations = self._validate_input(observations)
         self.bayes_smooth = bayesian.bayes_estimate(
             observations, trans_matrix, obs_matrix
         )
 
-    def discord(self, state: Iterable, filter_est: Iterable) -> float:
-        error = [1 if f == o else -1 for f, o in zip(filter_est, state)]
+    def discord(self, est_1: Iterable, est_2: Iterable) -> float:
+        """Calculates the discord order parameter for an HMM based on the
+        disagreement between two different estimates. This is the typical
+        `discord` measure for HMMs when one of the estimates is `naive` (equal
+        to observation)
+
+        Args:
+            est_1 (Iterable): first estimate of hidden state
+            est_2 (Iterable): second estimate of hidden state
+
+        Returns:
+            float: Discord order parameter between observations
+        """
+        error = [1 if f == o else -1 for f, o in zip(est_2, est_1)]
         return 1 - np.mean(error)
 
     def error_rate(self, pred_ts: Iterable, state_ts: Iterable) -> float:
+        """Calculates the error rate of predictions (pred_ts) as compared to
+        a known sequence of hidden states (state_ts)
+
+        Args:
+            pred_ts (Iterable): state prediction
+            state_ts (Iterable): time series of hidden states
+
+        Returns:
+            float: error rate of predictions
+        """
         return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
     def optimize(
@@ -120,6 +209,28 @@ class MarkovInfer:
         opt_type: Optional[OptClass] = OptClass.Local,
         algo_opts: Optional[Dict] = {}
     ) -> OptimizationResult:
+        """Main entrypoint for optimizing an internal model
+
+        Args:
+            observations (Iterable): Time series of observations
+            trans_init (np.ndarray): Initial guess at transition rate matrix
+            obs_init (np.ndarray): Initial guess at observation matrix
+            symmetric (Optional[bool], optional): Flag as to whether or not the
+                model is assumed to be symmetric. Only has an impact if Local
+                or Global likelihood optimizer is used. Defaults to False.
+            opt_type (Optional[OptClass], optional): Optimizer class, must be
+                one of the classes contained in the MODEL_REGISTRY.
+                Defaults to OptClass.Local.
+            algo_opts (Optional[Dict], optional): Additional configuration
+                options for the optimization algorithm. Defaults to {}.
+
+        Raises:
+            ValueError: If the provided optimization class is not registerd, or
+                valid.
+
+        Returns:
+            OptimizationResult: Result of optimization
+        """
         if not isinstance(opt_type, OptClass):
             raise ValueError(
                 'Invalid `opt_class`, must be a member of OptClass enum...'
