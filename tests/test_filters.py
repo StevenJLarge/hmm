@@ -297,7 +297,7 @@ def test_alpha_is_state_normalized_when_keyword_is_passed(A, B, obs, alpha_i, al
 def test_beta_is_state_normalized_when_keyword_is_passed(A, B, obs, beta_i, beta_f):
     # Act
     beta_norm = bayesian.beta_prob(obs, A, B, norm=True)
-# 
+
     # Assert
     assert all(np.isclose(beta_norm.sum(axis=1), 1.0))
 

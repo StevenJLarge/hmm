@@ -1,6 +1,6 @@
 from typing import Iterable, Tuple, Optional, Union
 import warnings
-# import numba
+import numba
 from operator import mul
 import numpy as np
 import scipy.optimize as so
@@ -173,7 +173,27 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         tracking_interval: Optional[int] = 100,
         tracking_norm: Optional[str] = 'fro',
         **kwargs
-    ):
+    ) -> None:
+        """Constructor for Expectation-Maximization optimizer
+
+        Args:
+            threshold (Optional[float], optional): update threshold below which
+                the iteration procedure for BW optimization will terminate.
+                Defaults to 1e-8.
+            maxiter (Optional[int], optional): Maximum number of iterations
+                performed before the optimizer terminates. Defaults to 5000.
+            track_optimization (Optional[Union[bool, int]], optional): Flag as
+            to whether or not internal updates to the transition and
+            observation matrices are recorded/tracked. Defaults to False.
+            tracking_interval (Optional[int], optional): Number of steps
+                between recording tracked values, only has an impact if
+                `track_optimization` is set to `True`. Defaults to 100.
+            tracking_norm (Optional[str], optional): Norm used to track matrix
+                update sizes. Can be any of the supported norms used in
+                `scipy.linalg.norm`
+                (https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.norm.html).
+                Defaults to 'fro' (Frobenius).
+        """
         if len(kwargs) > 0:
             warnings.warn(
                 f"Unrecognized optimizer options {kwargs}, proceeding without "
@@ -189,17 +209,40 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         self._update_norm = tracking_norm
 
     @staticmethod
-    # @numba.jit(nopython=True)
+    @numba.jit(nopython=True)
     def xi_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
-    ):
+    ) -> np.ndarray:
+        """Routine to calculate the `xi` matrix, which represents the joint
+        probability term in the BW algorithm caluclation p(x_t, x_t-1 | Y^T)
+        For a more complete description of the term rationale, see supporting
+        documentation
+
+        Args:
+            obs_ts (np.ndarray): time series of observation values
+            trans_matrix (np.ndarray): transition matrix
+            obs_matrix (np.ndarray): observation matrix
+            alpha_norm (np.ndarray): normalized (at point-in-time) alpha values
+                over time (dim: (n_obs, n_hidden_states))
+            beta_norm (np.ndarray): normalized (at point-in-time) beta values
+                over time (dim: (n_obs, n_hidden_states))
+            bayes (np.ndarray): Bayesian smoothed estimate of hidden state
+                probabilities (dim: (n_obs, n_hidden_states))
+
+        Returns:
+            np.ndarray: final xi-matrix, shape will be = shape(trans_matrix)
+        """
         _shape = trans_matrix.shape
+        # Iniaitalize the xi array with all zeros
         xi = np.zeros((*_shape, len(obs_ts) - 1))
 
         for t in range(1, len(obs_ts)):
+            # Stack the column of observation matrix to repeat
             stacked_obs = np.repeat(obs_matrix[:, obs_ts[t]], obs_matrix.shape[0]).reshape(*_shape)
 
+            # Outer products calculate the beta_i * alpha_j terms in the xi
+            # matrix term equation
             numer_outer = np.outer(
                 beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
             )
@@ -207,31 +250,64 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
                 beta_norm[t, :], alpha_norm[t - 1, :]
             )
 
+            # Calculate the elements of numerator and denominator
             numer = trans_matrix * stacked_obs * numer_outer
             denom = np.repeat(
                 np.sum(trans_matrix * stacked_obs * outer_denom, axis=0),
                 obs_matrix.shape[0]
             ).reshape(numer.shape).T
 
+            # Set the time-t element of the resulting xi matrix
             xi[:, :, t - 1] = numer / denom
 
+        # Return the sum over all points in time
         return xi.sum(axis=2)
 
     @staticmethod
-    def _gamma_numer(obs: int, t: int, bayes: np.ndarray):
-        # NOTE this must be vectorizable...
-        obs_num = np.zeros((bayes.shape[1], bayes.shape[1]))
+    def _gamma_numer(obs: int, t: int, bayes: np.ndarray) -> np.ndarray:
+        """Helper routine to return a matrix with the bayesan estimate in the
+        row corresponding to the time-t observation, and zeros in the other
 
-        target_row = obs
-        obs_num[target_row] = bayes[t, :]
+        Args:
+            obs (int): observation value at time t
+            t (int): time index value
+            bayes (np.ndarray): bayesian state estimate at time t
+
+        Returns:
+            np.ndarray: n_state x n_state array with row `obs` replaced with
+            the bayesian estimate
+        """
+        obs_num = np.zeros((bayes.shape[1], bayes.shape[1]))
+        obs_num[obs, :] = bayes[t, :]
         return obs_num
 
     @staticmethod
-    # @numba.jit(nopython=True)
+    @numba.jit(nopython=True)
     def _update_transition_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray
-    ):
+    ) -> np.ndarray:
+        """Baum-Welch update to transition matrix. This routine calls the
+        calculation of the xi-matrix (joint probability term) and divides the
+        result by the summation over all bayesian probability estimates, summed
+        over time (see supporting notebooks/documentation for a mathematical
+        rationale for each of these terms)
+
+        Args:
+            obs_ts (np.ndarray): time-series of HMM observations
+            trans_matrix (np.ndarray): transition matrix
+            obs_matrix (np.ndarray): observation matrix
+            alpha (np.ndarray): (normed) alpha value over time
+                (dim: (n_observations, n_hidden_states))
+            beta (np.ndarray): (normed) beta value over time
+                (dim: (n_observations, n_hidden_states))
+            bayes (np.ndarray): bayesian state estimate over time
+                (dim: (n_observations, n_hidden_states))
+
+        Returns:
+            np.ndarray: Updated transition matrix
+                (dim: (n_hidden_states, n_hidden_states))
+        """
         ratio = EMOptimizer.xi_matrix(
             obs_ts, trans_matrix, obs_matrix, alpha, beta, bayes
         )
@@ -246,7 +322,21 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return trans_matrix_updated
 
     @staticmethod
-    def _update_observation_matrix(obs_ts: np.ndarray, bayes: np.ndarray):
+    def _update_observation_matrix(
+        obs_ts: np.ndarray, bayes: np.ndarray
+    ) -> np.ndarray:
+        """Routine to update the observation matrix, based on recorded
+        observations and the bayesian state estiamtes. See supporting
+        documentation and notebooks for a mathematical description of this term
+
+        Args:
+            obs_ts (np.ndarray): observation time-series
+            bayes (np.ndarray): bayesian state estiamtes
+
+        Returns:
+            np.ndarray: updated observation matrix
+                (dim: (n_possible_observation_values, n_hidden_states))
+        """
         # This is almost certainly vectorizable, but I cant think of how to do it ATM...
         gamma_mat = np.zeros((bayes.shape[1], bayes.shape[1], len(obs_ts)))
 
@@ -259,7 +349,20 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
     def baum_welch_step(
         self, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         obs_ts: np.ndarray
-    ):
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Single-iteration of the Baum-Welch EM algorithm: Calculate expected
+        quantities first, and then update transition matrix and observation
+        matrix estimates.
+
+        Args:
+            trans_matrix (np.ndarray): current transition matrix estimate
+            obs_matrix (np.ndarray): current observation matrix estimate
+            obs_ts (np.ndarray): observation timeseries
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Updated transition and observation
+                matrices (respectively)
+        """
         # Expectation step: calculate quantities
         _alpha = bayesian.alpha_prob(obs_ts, trans_matrix, obs_matrix, norm=True)
         _beta = bayesian.beta_prob(obs_ts, trans_matrix, obs_matrix, norm=True)
@@ -279,6 +382,24 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         self, obs_ts: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
     ) -> EMOptimizationResult:
+        """Main entrypoint for executing on Baum-Welch optimization procedure
+        this routine will iterate updates to the input transition and
+        observation matrices until EITHER the iteration limit is hit OR the
+        maximum change to the A or B matrix during the previous step is below
+        a threshold (both the threshold level and maximum iteration number)
+        are specified in the constructor. Here, update size is quantified by a
+        matrix norm. THe defualt is the Frobenius norm, but can be changes to
+        any of the norms supported by `scipy.linalg.norm`
+        (https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.norm.html)
+
+        Args:
+            obs_ts (np.ndarray): time series of observations
+            trans_matrix (np.ndarray): transition matrix
+            obs_matrix (np.ndarray): observation matrix
+
+        Returns:
+            EMOptimizationResult: Optimization result
+        """
         iter_count = 0
         update_size = self._opt_threshold + 1
         update_tracker = []
@@ -289,16 +410,20 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         while update_size > self._opt_threshold and iter_count < self._max_iter:
             prev_trans, prev_obs = trans_matrix, obs_matrix
 
+            # Perform single-step update
             trans_matrix, obs_matrix = self.baum_welch_step(
                 trans_matrix, obs_matrix, obs_ts
             )
 
+            # Calculate update 'size'
             update_size = np.max([
                 sl.norm(prev_trans - trans_matrix, ord=self._update_norm),
                 sl.norm(prev_obs - obs_matrix, ord=self._update_norm)
             ])
             update_tracker.append(update_size)
 
+            # Record the transition and observation matrices if tracking is
+            # specified
             if self._track and (iter_count % self._interval == 0):
                 trans_mat_tracker.append(trans_matrix)
                 obs_mat_tracker.append(obs_matrix)
