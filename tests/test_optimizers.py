@@ -2,13 +2,16 @@
 import operator
 import pytest
 import numpy as np
-from hidden.optimize import base
+from hidden.dynamics import HMM
+from hidden.optimize import base, optimization
+from hidden.filters import bayesian
 
+TEST_ITERATIONS = 3
 
 A_test_2 = np.array([[0.7, 0.2], [0.3, 0.8]])
 A_test_2_sym = np.array([[0.7, 0.3], [0.3, 0.7]])
 
-B_test_2 = np.array([[0.9, 0.0], [0.1, 1.0]])
+B_test_2 = np.array([[0.9, 0.01], [0.1, 0.99]])
 B_test_2_sym = np.array([[0.9, 0.1], [0.1, 0.9]])
 
 A_test_3 = np.array([
@@ -24,9 +27,9 @@ A_test_3_sym = np.array([
 ])
 
 B_test_3 = np.array([
-    [1.0, 0.1, 0.4],
-    [0.0, 0.7, 0.3],
-    [0.0, 0.2, 0.3]
+    [0.98, 0.1, 0.4],
+    [0.01, 0.7, 0.3],
+    [0.01, 0.2, 0.3]
 ])
 
 B_test_3_sym = np.array([
@@ -35,11 +38,11 @@ B_test_3_sym = np.array([
     [0.2, 0.3, 0.5]
 ])
 
-test_2_enc = np.array([0.2, 0.3, 0.0, 0.1])
+test_2_enc = np.array([0.2, 0.3, 0.01, 0.1])
 test_2_enc_sym = np.array([0.3, 0.1])
 
 test_3_enc = np.array(
-    [0.1, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1, 0.4, 0.0, 0.3, 0.0, 0.2]
+    [0.1, 0.2, 0.1, 0.2, 0.1, 0.2, 0.1, 0.4, 0.01, 0.3, 0.01, 0.2]
 )
 test_3_enc_sym = np.array([0.1, 0.2, 0.2, 0.1, 0.2, 0.3])
 
@@ -60,7 +63,7 @@ test_data_comp_sym = [
 # IO tests
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_encoding_dimensions(A_matrix, B_matrix):
-    #Arrange
+    # Arrange
     opt = base.TestLikelihoodOptimizer()
 
     # Act
@@ -184,5 +187,74 @@ def test_matrix_decoding_symmetric(A_matrix, B_matrix, compressed):
     assert np.all(np.isclose(B_decode, B_matrix))
 
 
+@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+@pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
+def test_xi_matrix_shape(A_matrix, B_matrix, iteration):
+    # Arrange
+    _ = iteration
+    n_steps = 100
+    hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
+    hmm.init_uniform_cycle()
+    hmm.run_dynamics(n_steps)
+    obs_ts = np.array(hmm.get_obs_ts())
+    opt = optimization.EMOptimizer()
+
+    # Act
+    alpha_mat = bayesian.alpha_prob(obs_ts, A_matrix, B_matrix, norm=True)
+    beta_mat = bayesian.beta_prob(obs_ts, A_matrix, B_matrix, norm=True)
+    bayes_mat = bayesian.bayes_estimate(obs_ts, A_matrix, B_matrix)
+
+    sample_xi = opt.xi_matrix(
+        obs_ts, A_matrix, B_matrix, alpha_mat, beta_mat, bayes_mat
+    )
+
+    # Assert
+    assert sample_xi.shape == (hmm.A.shape)
+
+
+@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+@pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
+def test_bw_update_preserves_A_matrix_normalization(A_matrix, B_matrix, iteration):
+    # Arrange
+    _ = iteration
+    n_steps = 10
+    hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
+    hmm.init_uniform_cycle()
+    hmm.run_dynamics(n_steps)
+    obs_ts = np.array(hmm.get_obs_ts())
+    opt = optimization.EMOptimizer()
+
+    # Act
+    A_new, B_new = opt.baum_welch_step(A_matrix, B_matrix, obs_ts)
+    A_new_2, _ = opt.baum_welch_step(A_new, B_new, obs_ts)
+
+    # Assert
+    assert all(np.isclose(A_new.sum(axis=0), np.ones(A_new.shape[1])))
+    assert all(np.isclose(A_new_2.sum(axis=0), np.ones(A_new_2.shape[1])))
+
+
+@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+@pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
+def test_bw_update_preserves_B_matrix_normalization(A_matrix, B_matrix, iteration):
+    # Arrange
+    _ = iteration
+    n_steps = 10
+    hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
+    hmm.init_uniform_cycle()
+    hmm.run_dynamics(n_steps)
+    obs_ts = np.array(hmm.get_obs_ts())
+    opt = optimization.EMOptimizer()
+
+    # Act
+    A_new, B_new = opt.baum_welch_step(A_matrix, B_matrix, obs_ts)
+    _, B_new_2 = opt.baum_welch_step(A_new, B_new, obs_ts)
+
+    # Assert
+    assert all(np.isclose(B_new.sum(axis=0), np.ones(B_new.shape[1])))
+    assert all(np.isclose(B_new_2.sum(axis=0), np.ones(B_new_2.shape[1])))
+
+
 if __name__ == "__main__":
-    pytest.main([__file__])
+    # pytest.main([__file__])
+    for i, (A, B) in enumerate(test_data):
+        test_bw_update_preserves_A_matrix_normalization(A, B, i)
