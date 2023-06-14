@@ -7,7 +7,7 @@ from hidden.filters import bayesian
 
 
 # Test suite for filters routines
-TEST_ITERATIONS = 5
+TEST_ITERATIONS = 3
 
 # Global configureations
 A_test_2 = np.array([

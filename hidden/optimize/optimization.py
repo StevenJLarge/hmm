@@ -1,6 +1,6 @@
 from typing import Iterable, Tuple, Optional, Union
 import warnings
-import numba
+# import numba
 from operator import mul
 import numpy as np
 import scipy.optimize as so
@@ -199,7 +199,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
         for t in range(1, len(obs_ts)):
             stacked_obs = np.repeat(obs_matrix[:, obs_ts[t]], obs_matrix.shape[0]).reshape(*_shape)
- 
+
             numer_outer = np.outer(
                 beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
             )
@@ -252,7 +252,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
         for i, obs in enumerate(obs_ts):
             gamma_mat[:, :, i] = EMOptimizer._gamma_numer(obs, i, bayes)
-        gamma_denom = np.vstack([bayes.T, bayes.T]).reshape(gamma_mat.shape)
+        gamma_denom = np.vstack(bayes.shape[1] * [bayes.T]).reshape(gamma_mat.shape)
 
         return (gamma_mat.sum(axis=2) / gamma_denom.sum(axis=2))
 
@@ -264,7 +264,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         _alpha = bayesian.alpha_prob(obs_ts, trans_matrix, obs_matrix, norm=True)
         _beta = bayesian.beta_prob(obs_ts, trans_matrix, obs_matrix, norm=True)
         _bayes = bayesian.bayes_estimate(obs_ts, trans_matrix, obs_matrix)
- 
+
         # Maximization step: update matrices
         trans_matrix_updated = EMOptimizer._update_transition_matrix(
             obs_ts, trans_matrix, obs_matrix, _alpha, _beta, _bayes
@@ -293,10 +293,10 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
                 trans_matrix, obs_matrix, obs_ts
             )
 
-            update_size = np.max(
-                [sl.norm(prev_trans - trans_matrix, ord=self._update_norm),
-                sl.norm(prev_obs - obs_matrix, ord=self._update_norm)]
-            )
+            update_size = np.max([
+                sl.norm(prev_trans - trans_matrix, ord=self._update_norm),
+                sl.norm(prev_obs - obs_matrix, ord=self._update_norm)
+            ])
             update_tracker.append(update_size)
 
             if self._track and (iter_count % self._interval == 0):
@@ -319,7 +319,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
 if __name__ == "__main__":
     import time
-    import os
+    # import os
     from hidden import dynamics, infer
     from hidden.optimize.base import OptClass
     # testing routines here, lets work with symmetric ''true' matrices
@@ -385,4 +385,3 @@ if __name__ == "__main__":
     print(f"Time Sym    : {end_new_sym - start_new_sym}")
 
     print("--DONE--")
-
