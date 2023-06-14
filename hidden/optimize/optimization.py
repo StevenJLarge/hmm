@@ -189,7 +189,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         self._update_norm = tracking_norm
 
     @staticmethod
-    @numba.jit(nopython=True)
+    # @numba.jit(nopython=True)
     def xi_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
@@ -198,7 +198,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         xi = np.zeros((*_shape, len(obs_ts) - 1))
 
         for t in range(1, len(obs_ts)):
-            stacked_obs = np.repeat(obs_matrix[:, obs_ts[t]], 2).reshape(*_shape)
+            stacked_obs = np.repeat(obs_matrix[:, obs_ts[t]], obs_matrix.shape[0]).reshape(*_shape)
  
             numer_outer = np.outer(
                 beta_norm[t, :], (alpha_norm[t - 1, :] * bayes[t - 1, :])
@@ -208,7 +208,10 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             )
 
             numer = trans_matrix * stacked_obs * numer_outer
-            denom = np.sum(trans_matrix * stacked_obs * outer_denom, axis=0)
+            denom = np.repeat(
+                np.sum(trans_matrix * stacked_obs * outer_denom, axis=0),
+                obs_matrix.shape[0]
+            ).reshape(numer.shape).T
 
             xi[:, :, t - 1] = numer / denom
 

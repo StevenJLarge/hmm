@@ -6,6 +6,7 @@ from hidden.dynamics import HMM
 from hidden.optimize import base, optimization
 from hidden.filters import bayesian
 
+TEST_ITERATIONS = 1
 
 A_test_2 = np.array([[0.7, 0.2], [0.3, 0.8]])
 A_test_2_sym = np.array([[0.7, 0.3], [0.3, 0.7]])
@@ -186,56 +187,68 @@ def test_matrix_decoding_symmetric(A_matrix, B_matrix, compressed):
     assert np.all(np.isclose(B_decode, B_matrix))
 
 
-# TEST FOR EM ALGORITHM
-@pytest.mark.parametrize(['A_matrix', 'B_Matrix'], test_data)
-def test_xi_matrix_shape(A_matrix, B_matrix):
+@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+@pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
+def test_xi_matrix_shape(A_matrix, B_matrix, iteration):
     # Arrange
+    _ = iteration
     n_steps = 100
-    hmm = HMM(*A_matrix.shape)
+    hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
+    hmm.init_uniform_cycle()
     hmm.run_dynamics(n_steps)
     obs_ts = np.array(hmm.get_obs_ts())
     opt = optimization.EMOptimizer()
 
     # Act
-    alpha_mat = bayesian.alpha_prob(obs_ts, hmm.A, hmm.B, norm=True)
-    beta_mat = bayesian.beta_prob(obs_ts, hmm.A, hmm.B, norm=True)
-    bayes_mat = bayesian.bayes_estimate(obs_ts, hmm.A, hmm.B)
+    alpha_mat = bayesian.alpha_prob(obs_ts, A_matrix, B_matrix, norm=True)
+    beta_mat = bayesian.beta_prob(obs_ts, A_matrix, B_matrix, norm=True)
+    bayes_mat = bayesian.bayes_estimate(obs_ts, A_matrix, B_matrix)
 
     sample_xi = opt.xi_matrix(
-        hmm.A, hmm.B, obs_ts, alpha_mat, beta_mat, bayes_mat
+        obs_ts, A_matrix, B_matrix, alpha_mat, beta_mat, bayes_mat
     )
 
     # Assert
     assert sample_xi.shape == (hmm.A.shape)
 
 
-@pytest.mark.parameterize(['mat_shape'], [(2, 2), (3, 3)])
-def test_gamma_matrix_size(mat_shape):
-    n_steps = 100
-    hmm = HMM(mat_shape)
-    hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
-    
+# @pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+# @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
+# def test_bw_update_preserves_A_matrix_normalization(A_matrix, B_matrix, iteration):
+#     # Arrange
+#     _ = iteration
+#     n_steps = 10
+#     hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
+#     hmm.init_uniform_cycle()
+#     hmm.run_dynamics(n_steps)
+#     obs_ts = np.array(hmm.get_obs_ts())
+#     opt = optimization.EMOptimizer()
+
+#     # Act
+#     A_new, _ = opt.baum_welch_step(A_matrix, B_matrix, obs_ts)
+
+#     # Assert
+#     print(A_new.sum(axis=0))
+#     assert np.all(A_new.sum(axis=0) == 1.)
 
 
-def test_forward_filter_normalization():
-    pass
+# @pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+# @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
+# def test_bw_update_preserves_B_matrix_normalization(A_matrix, B_matrix, iteration):
+#     # Arrange
+#     _ = iteration
+#     n_steps = 10
+#     hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
+#     hmm.init_uniform_cycle()
+#     hmm.run_dynamics(n_steps)
+#     obs_ts = np.array(hmm.get_obs_ts())
+#     opt = optimization.EMOptimizer()
 
+#     # Act
+#     _, B_new = opt.baum_welch_step(A_matrix, B_matrix, obs_ts)
 
-def test_backward_filter_normalization():
-    pass
-
-
-def test_bayes_filter_normalization():
-    pass
-
-
-def test_bw_update_preserves_A_matrix_normalization():
-    pass
-
-
-def test_bw_update_preserves_B_matrix_normalization():
-    pass
+#     # Assert
+#     assert np.all(B_new.sum(axis=0) == 1.)
 
 
 if __name__ == "__main__":

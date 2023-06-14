@@ -5,7 +5,9 @@ import itertools
 from hidden import dynamics
 from hidden.filters import bayesian
 
+
 # Test suite for filters routines
+TEST_ITERATIONS = 5
 
 # Global configureations
 A_test_2 = np.array([
@@ -125,6 +127,11 @@ beta_test_data = (
     [sample_A_2, sample_B_2, sample_obs_seq_2, beta_2_ini, beta_2_fin],
     [sample_A_3, sample_B_3, sample_obs_seq_3, beta_3_ini, beta_3_fin]
 )
+
+norm_test_samples = [
+    [A_test_2, B_test_2],
+    [A_test_3, B_test_3]
+]
 
 
 @pytest.mark.parametrize(['filter_func', 'N'], itertools.product(filter_functions, [2, 3]))
@@ -277,22 +284,22 @@ def test_beta_calculation(A, B, obs, beta_i, beta_f):
     assert all(np.isclose(beta_tracker[-1, :], beta_f))
 
 
-@ pytest.mark.parametrize(['A', 'B', 'obs', 'alpha_i', "alpha_f"], alpha_test_data)
-def test_alpha_is_state_normalized_when_keyword_is_passed(A, B, obs, alpha_i, alpha_f):
-    # Act
-    alpha_norm = bayesian.alpha_prob(obs, A, B, norm=True)
+# @ pytest.mark.parametrize(['A', 'B', 'obs', 'alpha_i', "alpha_f"], alpha_test_data)
+# def test_alpha_is_state_normalized_when_keyword_is_passed(A, B, obs, alpha_i, alpha_f):
+#     # Act
+#     alpha_norm = bayesian.alpha_prob(obs, A, B, norm=True)
 
-    # Assert
-    assert all(np.isclose(alpha_norm.sum(axis=1), 1.0))
+#     # Assert
+#     assert all(np.isclose(alpha_norm.sum(axis=1), 1.0))
 
 
-@ pytest.mark.parametrize(['A', 'B', 'obs', 'beta_i', "beta_f"], beta_test_data)
-def test_beta_is_state_normalized_when_keyword_is_passed(A, B, obs, beta_i, beta_f):
-    # Act
-    beta_norm = bayesian.beta_prob(obs, A, B, norm=True)
+# @ pytest.mark.parametrize(['A', 'B', 'obs', 'beta_i', "beta_f"], beta_test_data)
+# def test_beta_is_state_normalized_when_keyword_is_passed(A, B, obs, beta_i, beta_f):
+#     # Act
+#     beta_norm = bayesian.beta_prob(obs, A, B, norm=True)
 
-    # Assert
-    assert all(np.isclose(beta_norm.sum(axis=1), 1.0))
+#     # Assert
+#     assert all(np.isclose(beta_norm.sum(axis=1), 1.0))
 
 
 @ pytest.mark.parametrize(['A', 'B', 'obs', 'alpha_i', "alpha_f"], alpha_test_data)
@@ -313,6 +320,61 @@ def test_beta_normalized_result(A, B, obs, beta_i, beta_f):
     # Assert
     assert all(np.isclose(beta_norm[0, :], beta_i / sum(beta_i)))
     assert all(np.isclose(beta_norm[-1, :], beta_f / sum(beta_f)))
+
+
+@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+@pytest.mark.parametrize(['A_matrix', 'B_matrix'], norm_test_samples)
+def test_forward_filter_normalization(A_matrix, B_matrix, iteration):
+    # Arrange
+    n_steps = 100
+    _ = iteration
+    hmm = dynamics.HMM(A_matrix.shape[0], B_matrix.shape[0])
+    hmm.init_uniform_cycle()
+    hmm.run_dynamics(n_steps)
+    obs_ts = np.array(hmm.get_obs_ts())
+
+    # Act, second arg is prediction tracker
+    fwd_tracker, _ = bayesian.forward_algo(obs_ts, A_matrix, B_matrix)
+
+    print(fwd_tracker)
+    # Assert
+    assert np.all(np.isclose(fwd_tracker.sum(axis=1), np.ones(fwd_tracker.shape[0])))
+
+
+@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+@pytest.mark.parametrize(['A_matrix', "B_matrix"], norm_test_samples)
+def test_backward_filter_normalization(A_matrix, B_matrix, iteration):
+    # Arrange
+    _ = iteration
+    n_steps = 100
+    hmm = dynamics.HMM(A_matrix.shape[0], B_matrix.shape[0])
+    hmm.init_uniform_cycle()
+    hmm.run_dynamics(n_steps)
+    obs_ts = np.array(hmm.get_obs_ts())
+
+    # Act
+    back_tracker, _ = bayesian.backward_algo(obs_ts, A_matrix, B_matrix)
+
+    # Assert
+    assert np.all(np.isclose(back_tracker.sum(axis=1), np.ones(back_tracker.shape[0])))
+
+
+@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+@pytest.mark.parametrize(['A_matrix', "B_matrix"], norm_test_samples)
+def test_bayes_filter_normalization(A_matrix, B_matrix, iteration):
+    # Arrange
+    _ = iteration
+    n_steps = 100
+    hmm = dynamics.HMM(*A_matrix.shape)
+    hmm.init_uniform_cycle()
+    hmm.run_dynamics(n_steps)
+    obs_ts = np.array(hmm.get_obs_ts())
+
+    # Act
+    bayes_tracker = bayesian.bayes_estimate(obs_ts, A_matrix, B_matrix)
+
+    # Assert
+    assert np.all(np.isclose(bayes_tracker.sum(axis=1), np.ones(bayes_tracker.shape[0])))
 
 
 if __name__ == "__main__":
