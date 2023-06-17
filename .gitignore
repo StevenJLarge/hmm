@@ -3,3 +3,5 @@
 /notebooks/personal/**
 /data/**
 .env
+/dist/*
+/build/*
