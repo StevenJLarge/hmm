@@ -9,6 +9,7 @@ setup(
     packages=find_packages(),
     version="1.0.0",
     long_description=long_description,
+    long_description_content_type='text/markdown',
     desription='''
         Implementation of methods used for analysis of hidden markov
         models, both on the system identification (parameter fitting)
