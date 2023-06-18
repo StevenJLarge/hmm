@@ -10,10 +10,8 @@ setup(
     version="1.0.1",
     long_description=long_description,
     long_description_content_type='text/markdown',
-    desription='''
-        Implementation of methods used for analysis of hidden markov
-        models, both on the system identification (parameter fitting)
-        and inferrence (filtering)
+    description='''
+        A python package for discrete-output hidden Markov models
     ''',
     author='Steven Large',
     author_email='stevelarge7@gmail.com',
