@@ -6,9 +6,9 @@ import numpy as np
 import scipy.optimize as so
 import scipy.linalg as sl
 
-from hidden.optimize.results import LikelihoodOptimizationResult, EMOptimizationResult
-from hidden.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
-from hidden.filters import bayesian
+from hidden_py.optimize.results import LikelihoodOptimizationResult, EMOptimizationResult
+from hidden_py.optimize.base import LikelihoodOptimizer, CompleteLikelihoodOptimizer
+from hidden_py.filters import bayesian
 
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
@@ -445,8 +445,8 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 if __name__ == "__main__":
     import time
     # import os
-    from hidden import dynamics, infer
-    from hidden.optimize.base import OptClass
+    from hidden_py import dynamics, infer
+    from hidden_py.optimize.base import OptClass
     # testing routines here, lets work with symmetric ''true' matrices
     A = np.array([
         [0.7, 0.3],

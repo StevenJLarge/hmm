@@ -1,7 +1,7 @@
 # test suite for dynamics routines
 import numpy as np
 import pytest
-from hidden import dynamics
+from hidden_py import dynamics
 
 dimension_tests = [(2, 2), (1, 2), (2, 1), (2, 4), (3, 1)]
 

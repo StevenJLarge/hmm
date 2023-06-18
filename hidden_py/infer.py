@@ -3,10 +3,10 @@
 from typing import Iterable, Optional, Dict
 import numpy as np
 from pandas import DataFrame, Series
-from hidden.optimize.registry import OPTIMIZER_REGISTRY
-from hidden.optimize.base import OptClass
-from hidden.optimize.results import OptimizationResult
-from hidden.filters import bayesian
+from hidden_py.optimize.registry import OPTIMIZER_REGISTRY
+from hidden_py.optimize.base import OptClass
+from hidden_py.optimize.results import OptimizationResult
+from hidden_py.filters import bayesian
 
 
 class MarkovInfer:
@@ -253,7 +253,7 @@ class MarkovInfer:
 
 
 if __name__ == "__main__":
-    from hidden import dynamics
+    from hidden_py import dynamics
     import time
     hmm = dynamics.HMM(2, 2)
     hmm.init_uniform_cycle()

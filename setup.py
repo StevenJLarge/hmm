@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='hidden',
+    name='hidden-py',
     packages=find_packages(),
     version="1.0.0",
     long_description=long_description,

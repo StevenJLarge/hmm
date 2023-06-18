@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 import itertools
 
-from hidden import dynamics
-from hidden.filters import bayesian
+from hidden_py import dynamics
+from hidden_py.filters import bayesian
 
 
 # Test suite for filters routines
