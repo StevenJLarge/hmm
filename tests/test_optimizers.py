@@ -2,9 +2,9 @@
 import operator
 import pytest
 import numpy as np
-from hidden.dynamics import HMM
-from hidden.optimize import base, optimization
-from hidden.filters import bayesian
+from hidden_py.dynamics import HMM
+from hidden_py.optimize import base, optimization
+from hidden_py.filters import bayesian
 
 TEST_ITERATIONS = 3
 

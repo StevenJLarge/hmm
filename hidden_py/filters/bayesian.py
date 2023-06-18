@@ -228,8 +228,8 @@ def beta_prob(
 
 if __name__ == "__main__":
     # test out the routines to make sure they all match
-    from hidden.infer import MarkovInfer
-    from hidden.dynamics import HMM
+    from hidden_py.infer import MarkovInfer
+    from hidden_py.dynamics import HMM
     import time
 
     hmm = HMM(2, 2)

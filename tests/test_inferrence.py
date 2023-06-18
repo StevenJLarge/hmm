@@ -4,10 +4,10 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from hidden import infer
-from hidden import dynamics
-from hidden.optimize.base import OptClass
-from hidden.optimize.results import OptimizationResult
+from hidden_py import infer
+from hidden_py import dynamics
+from hidden_py.optimize.base import OptClass
+from hidden_py.optimize.results import OptimizationResult
 
 
 # Global configureations

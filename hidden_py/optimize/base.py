@@ -6,7 +6,7 @@ from itertools import islice
 import numpy as np
 import numba
 
-from hidden.filters import bayesian
+from hidden_py.filters import bayesian
 
 
 class OptClass(Enum):
