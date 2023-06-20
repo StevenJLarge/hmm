@@ -46,7 +46,7 @@ The `hidden.dynamics` submodule contains the code necessary to simulate the hidd
 
 For instance, the code necessary to initialize a hidden Markov model, run the dyanamics, and extract the observation and state time-series
 
-```
+```python
 from hidden_py import dynamics
 
 # 2 hidden states, 2 possible observation values
@@ -73,7 +73,7 @@ The `infer` submodule contains the code that wraps lower-level functionality (pr
 
 There are two separate means of performing system identification: Local/Global partial likelihood optimization, and complete-data likelihood optimization. While more comprehensive details are contained in the github notebooks, broadly speaking partial data likelihood optimization performs relatively standard optimizations on the likelihood function $\mathcal{L}(\theta | Y)$ which considers only the observations as the _data_. Effectively, these optimizers wrap the `scipy.opt.minimize` functions by encoding and decoding the $A$ and $B$ matrices into a parameter vector (ensuring that their column-normalization is preserved) and calculating the negative log-likelihood of a particular parameter vector. In practice, given a set of observations, we can initialize an `analyzer` and run either local (using, by default, the `scipy.opt.minimize` function with the `L-BFGS-B` algorithm) or global (using the `scipy` SHGO algorithm) as:
 
-```
+```python
 from hidden_py import infer
 
 # Input the dimensions of the HMM and observations
@@ -100,7 +100,7 @@ opt_global = analyzer.optimize(observations, A_est, B_est, symmetric=False, opt_
 
 Now, for the complete-data likeihood optimization, the interface is very similar, but behind the scenes the code will implement an implementation of the Baum-Welch reparameterization algorithm (an instance of an Expectation-Maximization algorithm) to find the optimal parameter values. In practice, this can be done as:
 
-```
+```python
 from hidden_py import infer
 from hidden_py.optimize.base import OptClass
 
@@ -112,7 +112,7 @@ res_bw = analyzer.optimize(observations, A_est, B_est, opt_type=OptClass.ExpMax)
 
 In all cases, there is also an option to add algorithm options to customize the specifics of the optinization. Most relevant is for the expectation-maximization where you can specify a maximum number of iterations for the algorithm, as well as a threshold on the size of parameter changes (quantified by the matrix norm of pre- and post-update $A$ and $B$ matrices). This can be accessed through the `algo_opts` dictionary. For instance, if we wanted to change the maximum iterations in the BW algorithm to 1000 and set the termination threshold at `1e-10`, we would perform the previous call as
 
-```
+```python
 options = {
     'maxiter': 1000,
     "threshold": 1e-10
@@ -133,7 +133,7 @@ The `infer` submodule can also be used for the purposes of signal processing: gi
 
 Quantitatively the forward filter and Bayesian smoothed estimates of a given HMM sequence of observations can be calculated in the following way:
 
-```
+```python
 from hidden_py import infer
 
 analyzer = infer.MarkovInfer(2, 2)
