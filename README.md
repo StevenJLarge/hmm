@@ -32,12 +32,7 @@ Markov Models are a class of stochastic models for characterizing the behaviour 
 
 Without any ambiguity in the observed value (_i.e._ the underlying Markov model is directly observed) the system is just a Markov model. The causal diagram of a Markov model is shown in the figure below
 
-<!-- ![markov_model](https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.pdf) -->
-<object data="https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.pdf" type="application/pdf" width="700px" height="700px">
-    <embed src="https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.pdf">
-        <p>This browser does not support PDFs. Please download the PDF to view it: <a href="https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.pdf">Download PDF</a>.</p>
-    </embed>
-</object>
+![markov_model](https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.png)
 
 Because of the normalization of probability, the columns of $A$ are constrained to be equal to unity.
 
