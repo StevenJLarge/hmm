@@ -30,7 +30,16 @@ Here, we have thusfar considered primarily scenarios where the observation value
 
 Markov Models are a class of stochastic models for characterizing the behaviour of systems that transition between states randomly, with a probability that depends only on the curent state of the system (_i.e._ they are memoryless). Because if this simplification, the dynamics on a set of discrete states can be captured entirely by a single matrix, known as the _transition matrix_, $A$, with elements $A_{ij} = p(x_t=i | x_{t-1} = j)$ quantifying the probability that during timestep $t-1 \to t$, the system will transition from state $j\to i$.
 
-Because of the normalization of probability, the columns of $A$ are constrained to be qual to unity.
+Without any ambiguity in the observed value (_i.e._ the underlying Markov model is directly observed) the system is just a Markov model. The causal diagram of a Markov model is shown in the figure below
+
+<!-- ![markov_model](https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.pdf) -->
+<object data="https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.pdf" type="application/pdf" width="700px" height="700px">
+    <embed src="https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.pdf">
+        <p>This browser does not support PDFs. Please download the PDF to view it: <a href="https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.pdf">Download PDF</a>.</p>
+    </embed>
+</object>
+
+Because of the normalization of probability, the columns of $A$ are constrained to be equal to unity.
 
 A hidden Markov model (HMM), on the other hand, is a probabilistic function of a Markov model. This means that the output of an HMM is an observation $y$, that is correlated with the underlying (hidden/unobserved) state of the Markov model, but only probabilitsically so. For a set of discrete possible observations (as we capture in this package), the observation process can also be modelled by a matrix (the _observation matrix_) $B$ with elemetnts $B_{ij} = p(y_t = i | x_{t} = j)$ quantifying the probability that our measurement/observation $y_t$ at time $t$ is equal to $i$ given the hidden system is in state $j$. Here, the diagonal elements represent our probability of observing the _correct_ state, while off-diagonals represent the probability of error.
 
