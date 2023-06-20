@@ -20,33 +20,34 @@ To install this package simply run the command:
 
 ## Overview
 
-This package contains logic for inferring, simulating, and fitting Hidden Markov Models with discrete states and obserfvations. In contrast to more common HMM packages that deal primarily with _mixture models_, output symbols are continuous, and drawn from a distriubtion of values that is somehow conditional on the hidden state.
+This package contains logic for inferring, simulating, and fitting Hidden Markov Models with discrete states and observations. This poackage serves as a complement to several common HMM packages that deal primarily with _mixture models_, where output symbols are continuous, and drawn from a distriubtion of values that is somehow conditional on the hidden state.
 
-Here, we have thusfar considered primarily scenarios where the observation value is an integer, and one of the possible hidden states. There are three major use-cases for this codebase: dynamics/simulation, system identification/parameter fitting, and signal processing. In all cases, these functionalities are outlined in several tutorial notebooks in the `notebooks/tutorials` location of the [github repository](https://github.com/StevenJLarge/hmm)
+Here, we have considered primarily scenarios where the observation value is an integer, and one of the possible hidden states, although this is not required, there could be more hidden states than possible observations, or vice-versa, all that really matters is that the observation values (and hidden state values) are discrete. There are three major use-cases for this codebase: dynamics/simulation, system identification/parameter fitting, and signal processing. In all cases, these functionalities are outlined in several tutorial notebooks in the `notebooks/tutorials` location of the [github repository](https://github.com/StevenJLarge/hmm)
 
 <br />
 
 ## Hidden Markov Models
 
-Markov Models are a class of stochastic models for characterizing the behaviour of systems that transition between states randomly, with a probability that depends only on the curent state of the system (_i.e._ they are memoryless). Because if this simplification, the dynamics on a set of discrete states can be captured entirely by a single matrix, known as the _transition matrix_, $A$, with elements $A_{ij} = p(x_t=i | x_{t-1} = j)$ quantifying the probability that during timestep $t-1 \to t$, the system will transition from state $j\to i$. Because of the normalization of probability, the columns of $A$ are constrained to be equal to unity.
+Markov Models are a class of stochastic models for characterizing the behaviour of systems that transition between states randomly, with a probability that depends only on the current state of the system (_i.e._ they are memoryless). Because if this simplification, the dynamics on a set of discrete states can be captured entirely by a single matrix, known as the _transition matrix_, $A$, with elements $A_{ij} = p(x_t=i | x_{t-1} = j)$ quantifying the probability that during timestep $t-1 \to t$, the system will transition from state $j\to i$. Because of the normalization of probability, the columns of $A$ are constrained to be equal to unity.
 
 Without any ambiguity in the observed value (_i.e._ the underlying Markov model is directly observed) the system is just a Markov model. The causal diagram of a Markov model is shown in the figure below.
 
 ![markov_model](https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.png)
 
-Here, the 
+Here, the state $x_t$ at time $t$ only depends on the state at the previous time $t-1$. As a result the ecolution of a probability distribution over states can be modelled by simply multiplying an initial distribution by the transition matrix, and repeating the process for each time step.  For example, given an initial distribution over states at time 0 and a transition matrix $A$, the probability distribution at time $T$ is
 
-A hidden Markov model (HMM), on the other hand, is a probabilistic function of a Markov model. This means that the output of an HMM is an observation $y$, that is correlated with the underlying (hidden/unobserved) state of the Markov model, but only probabilitsically so. For a set of discrete possible observations (as we capture in this package), the observation process can also be modelled by a matrix (the _observation matrix_) $B$ with elemetnts $B_{ij} = p(y_t = i | x_{t} = j)$ quantifying the probability that our measurement/observation $y_t$ at time $t$ is equal to $i$ given the hidden system is in state $j$. Here, the diagonal elements represent our probability of observing the _correct_ state, while off-diagonals represent the probability of error. In comparison to the figure used in the Markov system, the below diagram shows how causality works in a hidden Markov model.
+$$ p_{T} = A^T \cdot p_0 $$
+
+
+A hidden Markov model (HMM), on the other hand, is a probabilistic function of a Markov model. This means that the output of an HMM (th0e observation $y$) is correlated with the underlying (hidden/unobserved) state of the Markov model, but only probabilitsically so. For a set of discrete possible observations (as we capture in this package), the observation process can also be modelled by a matrix (the _observation matrix_) $B$ with elemetnts $B_{ij} = p(y_t = i | x_{t} = j)$ quantifying the probability that our measurement/observation $y_t$ at time $t$ is equal to $i$ given the hidden system is in state $j$. Here, the diagonal elements represent our probability of observing the _correct_ state, while off-diagonals represent the probability of error. In comparison to the figure used in the Markov system, the below diagram shows how causality works in a hidden Markov model.
 
 ![midden_markov_model](https://github.com/StevenJLarge/hmm/blob/master/public/resources/hidden_markov_schematic.png)
 
 Here, the observations ($y_t$) are stochastic (random) functions of the underlying state, but not necessarily equal to it. However (importantly) the observation at time $t$ only depends explicitly on the hiddenstate at time $t$.
 
-As for the components of the packag, the goal of simulation is simply to generate trajectories of both the hidden state and observation time-series that is conistent with these probabilities.
+--- 
 
-The goal for system identification/parameter fitting is to fit the most likely parameters (elements of the $A$ and $B$) matrices, given only a time series of observations.
-
-Finally, the goal if signal processing is to make use of the observation sequence to infer what the hidden state is at a particular point in time.
+As for the components of the package, the goal of the simulation functionality is simply to generate trajectories of both the hidden state and observation time-series that are conistent with these probabilities. The goal for system identification/parameter fitting is to fit the most likely parameters (elements of the $A$ and $B$) matrices, given only a time series of observations. Finally, the goal if signal processing is to make use of the observation sequence to infer what the hidden state is at a particular point in time.
 
 ### Dynamics/Simulation
 
