@@ -15,6 +15,7 @@ To install this package simply run the command:
   - [System Identification](#system-identification)
   - [Signal Processing](#signal-processing)
 - [Roadmap](#roadmap)
+- [References](#references)
 
 ---
 
@@ -149,7 +150,19 @@ In essence, this set of tools allows you to infer the best model given a set of 
 
 ### Signal Processing
 
-The `infer` submodule can also be used for the purposes of signal processing: given a valid estimate of the model parameters, how can we best estimate the hidden state value, given the observations. There are two distinct domains of application, first would be prediction in real time, where only observations in the past are available for inferring the current hidden state (this would use the so-called forward-filtered estiamte). There is also an _ex post_ approach, which uses the entirety of observations from a given period of time to estimate the hidden state at a particular point within that time period. This is the so-called Bayesian smoothec estiamte of the hidden state.
+The `infer` submodule can also be used for the purposes of signal processing: given a valid estimate of the model parameters, how can we best estimate the hidden state value, given the observations. There are two distinct domains of application, first would be prediction in real time, where only observations in the past are available for inferring the current hidden state (this would use the so-called forward-filtered estiamte). There is also an _ex post_ approach, which uses the entirety of observations from a given period of time to estimate the hidden state at a particular point within that time period. This is the so-called Bayesian smoothed estiamte of the hidden state.
+
+Mathematically, if we denote $Y^t \equiv \{ y_0, y_1, \cdots, y_t \}$ as the sequence of observations from tie $t=0$ up to time $t$, then for a total trajectory length of $T$, the forward filter and Bayesian smoothed estimate are calculating
+
+$$
+p(x_t | Y^t) \quad \to \qquad \text{\sf Forward-filter} \\
+
+\, \\
+
+p(x_t | Y^T) \quad \to \quad \text{\sf Bayesian smoother}
+$$
+
+where, $x_t$ is the hidden state at time $t$.
 
 Quantitatively the forward filter and Bayesian smoothed estimates of a given HMM sequence of observations can be calculated in the following way:
 
@@ -171,3 +184,13 @@ The tutorial notebook `notebooks/tutorials.03-slarge-hmm-filters.ipynb` in the [
 <br />
 
 ---
+
+## References
+
+There is a breadth of research and literatur on HMMs out in the world, but below are a few sources that I found particularly helpful in working on this project
+
+<ol>
+    <li> <a href="https://www.cambridge.org/core/books/control-theory-for-physicists/21AFE5D6C475D1B44BCF9B8536338D98">"Control Theory for Physicists"</a>, J. Bechhoeffer, C
+    Cambridge University Press, 2021</li>
+    <li><a href="http://numerical.recipes/aboutNR3book.html">"Numerical Recipes: The Art of Scientific Computing"</a>, W.H. Press, S.A. Teukolsky, W.T. Vetterling, & B.P. Flannery, Cambridge University Press, 3rd ed., 2007</li>
+</ol>
