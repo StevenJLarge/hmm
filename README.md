@@ -32,9 +32,9 @@ Markov Models are a class of stochastic models for characterizing the behaviour 
 
 Without any ambiguity in the observed value (_i.e._ the underlying Markov model is directly observed) the system is just a Markov model. The causal diagram of a Markov model is shown in the figure below.
 
-<center>
+<p align='center'>
     <img src="https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.png?raw=true" width="75%" vspace="30px"/>
-</center>
+</p>
 
 Here, the state $x_t$ at time $t$ only depends on the state at the previous time $t-1$. As a result the ecolution of a probability distribution over states can be modelled by simply multiplying an initial distribution by the transition matrix, and repeating the process for each time step. For example, given an initial distribution over states at time 0 and a transition matrix $A$, the probability distribution at time $T$ is
 
@@ -42,9 +42,9 @@ $$ p_T = A^T \cdot p_0 $$
 
 A hidden Markov model (HMM), on the other hand, is a probabilistic function of a Markov model. This means that the output of an HMM (th0e observation $y$) is correlated with the underlying (hidden/unobserved) state of the Markov model, but only probabilitsically so. For a set of discrete possible observations (as we capture in this package), the observation process can also be modelled by a matrix (the _observation matrix_) $B$ with elemetnts $B_{ij} = p(y_t = i | x_{t} = j)$ quantifying the probability that our measurement/observation $y_t$ at time $t$ is equal to $i$ given the hidden system is in state $j$. Here, the diagonal elements represent our probability of observing the _correct_ state, while off-diagonals represent the probability of error. In comparison to the figure used in the Markov system, the below diagram shows how causality works in a hidden Markov model.
 
-<center>
+<p align="center">
     <img src="https://github.com/StevenJLarge/hmm/blob/master/public/resources/hidden_markov_schematic.png?raw=true" width="75%" vspace="30px" />
-</center>
+</p>
 
 Here, the observations ($y_t$) are stochastic (random) functions of the underlying state, but not necessarily equal to it. However (importantly) the observation at time $t$ only depends explicitly on the hiddenstate at time $t$.
 
@@ -77,9 +77,9 @@ hidden_states = hmm.get_state_ts()
 
 As an example, the schematic below shows a possible trajectory for a HMM with 2 hidden states and 2 possible observation values.
 
-<center>
-    <img src="https://github.com/StevenJLarge/hmm/blob/master/public/resources/sample_trajectory.png?raw=true" width="80%" vspace="30px" />
-</center>
+<p align="center">
+    <img src="https://github.com/StevenJLarge/hmm/blob/master/public/resources/sample_trajectory.png?raw=true" width="75%" vspace="30px" />
+</p>
 
 Here the red dots represent the state of the hidden system over time, while the black dots indicate the observed value at that point in time. So, at time point 3, for instance, the observed value differs from the hidden state. See the `notebooks/tutorials/02-hidden-markov-model.ipynb` in the [github source](https://github.com/StevenJLarge/hmm) for a more in-depth review of this process.
 
