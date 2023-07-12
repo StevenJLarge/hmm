@@ -282,7 +282,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return obs_num
 
     @staticmethod
-    @numba.jit(nopython=True)
+    # @numba.jit(nopython=True)
     def _update_transition_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray
