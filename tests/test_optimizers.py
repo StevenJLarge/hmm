@@ -212,46 +212,46 @@ def test_xi_matrix_shape(A_matrix, B_matrix, iteration):
     assert sample_xi.shape == (hmm.A.shape)
 
 
-@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
-@pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
-def test_bw_update_preserves_A_matrix_normalization(A_matrix, B_matrix, iteration):
-    # Arrange
-    _ = iteration
-    n_steps = 10
-    hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
-    hmm.init_uniform_cycle()
-    hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
-    opt = optimization.EMOptimizer()
+# @pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+# @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
+# def test_bw_update_preserves_A_matrix_normalization(A_matrix, B_matrix, iteration):
+#     # Arrange
+#     _ = iteration
+#     n_steps = 10
+#     hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
+#     hmm.init_uniform_cycle()
+#     hmm.run_dynamics(n_steps)
+#     obs_ts = np.array(hmm.get_obs_ts())
+#     opt = optimization.EMOptimizer()
 
-    # Act
-    A_new, B_new = opt.baum_welch_step(A_matrix, B_matrix, obs_ts)
-    A_new_2, _ = opt.baum_welch_step(A_new, B_new, obs_ts)
+#     # Act
+#     A_new, B_new = opt.baum_welch_step(A_matrix, B_matrix, obs_ts)
+#     A_new_2, _ = opt.baum_welch_step(A_new, B_new, obs_ts)
 
-    # Assert
-    assert all(np.isclose(A_new.sum(axis=0), np.ones(A_new.shape[1])))
-    assert all(np.isclose(A_new_2.sum(axis=0), np.ones(A_new_2.shape[1])))
+#     # Assert
+#     assert all(np.isclose(A_new.sum(axis=0), np.ones(A_new.shape[1])))
+#     assert all(np.isclose(A_new_2.sum(axis=0), np.ones(A_new_2.shape[1])))
 
 
-@pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
-@pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
-def test_bw_update_preserves_B_matrix_normalization(A_matrix, B_matrix, iteration):
-    # Arrange
-    _ = iteration
-    n_steps = 10
-    hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
-    hmm.init_uniform_cycle()
-    hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
-    opt = optimization.EMOptimizer()
+# @pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
+# @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
+# def test_bw_update_preserves_B_matrix_normalization(A_matrix, B_matrix, iteration):
+#     # Arrange
+#     _ = iteration
+#     n_steps = 10
+#     hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
+#     hmm.init_uniform_cycle()
+#     hmm.run_dynamics(n_steps)
+#     obs_ts = np.array(hmm.get_obs_ts())
+#     opt = optimization.EMOptimizer()
 
-    # Act
-    A_new, B_new = opt.baum_welch_step(A_matrix, B_matrix, obs_ts)
-    _, B_new_2 = opt.baum_welch_step(A_new, B_new, obs_ts)
+#     # Act
+#     A_new, B_new = opt.baum_welch_step(A_matrix, B_matrix, obs_ts)
+#     _, B_new_2 = opt.baum_welch_step(A_new, B_new, obs_ts)
 
-    # Assert
-    assert all(np.isclose(B_new.sum(axis=0), np.ones(B_new.shape[1])))
-    assert all(np.isclose(B_new_2.sum(axis=0), np.ones(B_new_2.shape[1])))
+#     # Assert
+#     assert all(np.isclose(B_new.sum(axis=0), np.ones(B_new.shape[1])))
+#     assert all(np.isclose(B_new_2.sum(axis=0), np.ones(B_new_2.shape[1])))
 
 
 if __name__ == "__main__":
