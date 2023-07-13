@@ -256,5 +256,6 @@ def test_xi_matrix_shape(A_matrix, B_matrix, iteration):
 
 if __name__ == "__main__":
     # pytest.main([__file__])
-    for i, (A, B) in enumerate(test_data):
-        test_bw_update_preserves_A_matrix_normalization(A, B, i)
+    # for i, (A, B) in enumerate(test_data):
+    #     test_bw_update_preserves_A_matrix_normalization(A, B, i)
+    pass
