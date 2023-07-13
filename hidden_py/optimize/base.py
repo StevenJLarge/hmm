@@ -46,6 +46,9 @@ class BaseOptimizer(ABC):
         """
         return [(lower_lim, upper_lim)] * n_params
 
+    def _build_optimization_constraints(self, n_params: int, dim_tuple: Tuple):
+        pass
+
     @abstractmethod
     def optimize(self):
         pass
@@ -252,7 +255,7 @@ class LikelihoodOptimizer(BaseOptimizer):
         return trans_mat, obs_mat
 
     @staticmethod
-    @numba.jit(nopython=True)
+    # @numba.jit(nopython=True)
     def _likelihood(
         predictions: np.ndarray, obs_ts: np.ndarray, B: np.ndarray
     ) -> float:
@@ -271,7 +274,11 @@ class LikelihoodOptimizer(BaseOptimizer):
         likelihood = 0
         for i, obs in enumerate(obs_ts):
             inner = predictions[i, :] @ B[obs, :]
+            if inner <= 0:
+                print("OOPS!")
             likelihood -= np.log(inner)
+            if likelihood == np.nan:
+                print('Hmmm...')
         return likelihood
 
     @staticmethod

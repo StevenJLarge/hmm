@@ -13,14 +13,14 @@ from hidden_py.filters import bayesian
 
 class LocalLikelihoodOptimizer(LikelihoodOptimizer):
     def __init__(
-        self, algorithm: Optional[str] = "L-BFGS-B"
+        self, algorithm: Optional[str] = "SLSQP"
     ) -> None:
         """Contructor for LicalLikelihoodOptimizer class
 
         Args:
             algorithm (Optional[str], optional): Algorithm to use in numerical
-                optimization. Defaults to "L-BFGS-B" (Limited-Memory
-                Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm).
+                optimization. Defaults to "SLSQP" (Sequential Least-SQuareds
+                Programming).
         """
         self.algo = algorithm
         super().__init__()
@@ -56,6 +56,8 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         opt_args = (dim_tuple, obs_ts, symmetric)
         # Parameter bounds in optimization
         bnds = self._build_optimization_bounds(len(param_init))
+        if any(dim_tuple > 2):
+            const = self._build_optimization_constraints()
 
         # run optimizer
         self.result = so.minimize(
@@ -209,7 +211,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         self._update_norm = tracking_norm
 
     @staticmethod
-    @numba.jit(nopython=True)
+    # @numba.jit(nopython=True)
     def xi_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
@@ -453,17 +455,34 @@ if __name__ == "__main__":
         [0.3, 0.7]
     ])
 
+    A_3 = np.array([
+        [0.80, 0.05, 0.05],
+        [0.15, 0.85, 0.20],
+        [0.05, 0.10, 0.75]
+    ])
+
     B = np.array([
         [0.9, 0.1],
         [0.1, 0.9]
     ])
 
+    B_3 = np.array([
+        [0.90, 0.05, 0.10],
+        [0.05, 0.85, 0.05],
+        [0.05, 0.10, 0.85]
+    ])
+
     hmm = dynamics.HMM(2, 2)
+    hmm3 = dynamics.HMM(3, 3)
     hmm.initialize_dynamics(A, B)
+    hmm3.initialize_dynamics(A_3, B_3)
     hmm.run_dynamics(500)
+    hmm3.run_dynamics(500)
     obs_ts = hmm.get_obs_ts()
+    obs_ts_3 = hmm3.get_obs_ts()
 
     analyzer = infer.MarkovInfer(2, 2)
+    analyzer3 = infer.MarkovInfer(3, 3)
 
     A_test = np.array([
         [0.75, 0.25],
@@ -485,6 +504,14 @@ if __name__ == "__main__":
         [0.05, 0.95]
     ])
 
+    A_test_3 = np.array([
+        [0.80, 0.10, 0.15],
+        [0.15, 0.85, 0.10],
+        [0.05, 0.05, 0.75]
+    ])
+
+    B_test_3 = B_3
+
     param_init_legacy = [0.2, 0.05]
     start_leg = time.time()
     # legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
@@ -493,11 +520,12 @@ if __name__ == "__main__":
     opt_em = EMOptimizer()
 
     start_new_nonsym = time.time()
-    # res_nosym = opt.optimize(obs_ts, A_test, B_test)
+    res_nosym = opt.optimize(obs_ts, A_test, B_test)
+    res_nosym3 = opt.optimize(obs_ts_3, A_test_3, B_test_3)
     end_new_nonsym = time.time()
 
     start_new_sym = time.time()
-    # res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
+    res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
     end_new_sym = time.time()
 
     start_new_em = time.time()

@@ -256,13 +256,22 @@ if __name__ == "__main__":
     from hidden_py import dynamics
     import time
     hmm = dynamics.HMM(2, 2)
+    hmm3 = dynamics.HMM(3, 3)
+
     hmm.init_uniform_cycle()
     hmm.run_dynamics(1000)
+
+    hmm3.init_uniform_cycle()
+    hmm3.run_dynamics(500)
 
     state_ts = hmm.get_state_ts()
     obs_ts = hmm.get_obs_ts()
 
+    state_ts = hmm3.get_state_ts()
+    obs_ts3 = hmm3.get_obs_ts()
+
     BayesInfer = MarkovInfer(2, 2)
+    BayesInfer3 = MarkovInfer(3, 3)
     param_init = (0.15, 0.15)
     A_init = np.array([[0.85, 0.15], [0.15, 0.85]])
     B_init = np.array([[0.85, 0.15], [0.15, 0.85]])
@@ -278,6 +287,8 @@ if __name__ == "__main__":
     res_glo = BayesInfer.optimize(
         obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global
     )
+
+    res_loc3 = BayesInfer3.optimize(obs_ts3, hmm3.A, hmm3.B, opt_type=OptClass.Local)
 
     start_bw = time.time()
     res_bw = BayesInfer.optimize(
