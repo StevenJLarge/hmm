@@ -151,6 +151,24 @@ class LikelihoodOptimizer(BaseOptimizer):
         encoded[mul(*A.shape) - A.shape[0]:] = np.ravel(B_compressed, order='F')
         return encoded, dim_tuple
 
+    # Alternatie encoding scheme
+    @staticmethod
+    def _encode_parameters_alt(
+            A: np.ndarray, B: np.ndarray
+        ):
+        encoded = np.zeros(mul(*A.shape) + mul(*B.shape) - A.shape[0] - B.shape[0])
+        dim_tuple = (A.shape, B.shape)
+
+        A_flat = np.ravel(A, order='F')
+        B_flat = np.ravel(B, order='F')
+        A_compressed = np.delete(A_flat, slice(0, len(A_flat), A.shape[0] + 1))
+        B_compressed = np.delete(B_flat, slice(0, len(B_flat), B.shape[0] + 1))
+
+        encoded[: mul(*A.shape) - A.shape[0]] = A_compressed
+        encoded[mul(*A.shape) - A.shape[0]:] = B_compressed
+
+        return encoded, dim_tuple
+
     @staticmethod
     def _extract_parameters_symmetric(
         param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple
