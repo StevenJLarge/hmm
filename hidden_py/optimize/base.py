@@ -146,8 +146,9 @@ class LikelihoodOptimizer(BaseOptimizer):
         A_compressed = np.triu(A, k=1)[:, 1:] + np.tril(A, k=-1)[:, :-1]
         B_compressed = np.triu(B, k=1)[:, 1:] + np.tril(B, k=-1)[:, :-1]
         # Encode the off-diagonals into a vector
-        encoded[: mul(*A.shape) - A.shape[0]] = np.ravel(A_compressed)
-        encoded[mul(*A.shape) - A.shape[0]:] = np.ravel(B_compressed)
+        # Swapped order here, but that still doesnt fix things as the column indexing gets messed up in the compression step...
+        encoded[: mul(*A.shape) - A.shape[0]] = np.ravel(A_compressed, order='F')
+        encoded[mul(*A.shape) - A.shape[0]:] = np.ravel(B_compressed, order='F')
         return encoded, dim_tuple
 
     @staticmethod
@@ -327,3 +328,16 @@ class TestLikelihoodOptimizer(LikelihoodOptimizer):
     def optimize(self):
         pass
 
+
+if __name__ == "__main__":
+    # Testing the encoding / decoding logic
+
+    test_matrix = np.array([
+        [0.80, 0.10, 0.20],
+        [0.15, 0.70, 0.10],
+        [0.05, 0.20, 0.70]
+    ])
+
+    test = TestLikelihoodOptimizer()
+    encoded = test._encode_parameters(test_matrix, test_matrix)
+    decoded = test._extract_parameters(encoded, (3, 3), (3, 3))
