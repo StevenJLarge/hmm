@@ -56,8 +56,8 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         opt_args = (dim_tuple, obs_ts, symmetric)
         # Parameter bounds in optimization
         bnds = self._build_optimization_bounds(len(param_init))
-        if any(dim_tuple > 2):
-            const = self._build_optimization_constraints()
+        # if any(dim_tuple > 2):
+            # const = self._build_optimization_constraints()
 
         # run optimizer
         self.result = so.minimize(
