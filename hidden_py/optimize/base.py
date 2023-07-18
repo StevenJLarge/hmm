@@ -154,8 +154,40 @@ class LikelihoodOptimizer(BaseOptimizer):
     # Alternatie encoding scheme
     @staticmethod
     def _encode_parameters_alt(
-            A: np.ndarray, B: np.ndarray
-        ):
+            trans_mat: np.ndarray, obs_mat: np.ndarray
+        ) -> Tuple[np.ndarray, Tuple]:
+        """Encodes input (non-symmetric, or not-necessarily symmetric) matrices
+        for transitions (A) and observations (B) into a 1-d parameter vector
+        theta = (p_1, p_2, ...) and also returns a tuple containing the
+        dimensions of the input arrays
+
+        Note that because the input matrices are both stochastic matrices, the
+        columns are normalized and so the diagonal entries are not independent
+        parameters, so they do not get included in the encoded vector. The
+        compressed output is stored in a column-major format, as we want to
+        impose constraints on column-wise sums for systems with dimesion > 2
+        during the optimization
+
+        EXAMPLE
+
+        INPUTS:
+        A_1 = [0.8, 0.3]      B_1 = [0.9, 0.15]
+              [0.2, 0.7]            [0.1, 0.85]
+
+        A_2
+
+        OUTPUTS:
+        encoded: [0.3, 0.2, 0.15, 0.1]
+        dim_tuple: ((2,2), (2,2))
+
+        Args:
+            trans_mat (np.ndarray): transition matrix for hidden states
+            obs_mat (np.ndarray): matrix for symbol emmissions (observations)
+
+        Returns:
+            Tuple[np.ndarray, Tuple]: encoded param vector,
+                input matrix dimensions
+        """
         encoded = np.zeros(mul(*A.shape) + mul(*B.shape) - A.shape[0] - B.shape[0])
         dim_tuple = (A.shape, B.shape)
 
@@ -168,6 +200,43 @@ class LikelihoodOptimizer(BaseOptimizer):
         encoded[mul(*A.shape) - A.shape[0]:] = B_compressed
 
         return encoded, dim_tuple
+
+    # Alternate decoding scheme
+    @staticmethod
+    def _extract_parameters_alt(
+        param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        # Sample input
+        #
+        # [0.1, 0.2, 0.05, 0.15] --> A = [[0.9, 0.2], [0.1, 0.8]] and B = ...
+        # 
+        # [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, ...] -->
+        #  --> A = [
+        #           [0.75, 0.20, 0.30]
+        #           [0.10, 0.55, 0.35]
+        #           [0.15, 0.25, 0.35]
+        #         ]
+        #
+        A_comp = param_arr[:mul(*A_dim) - A_dim[0]]
+        B_comp = param_arr[mul(*A_dim) - A_dim[0]:]       
+
+        A_comp = A_comp.reshape(A_dim[1], A_dim[0] - 1).T
+        B_comp = B_comp.reshape(B_dim[1], B_dim[0] - 1).T
+
+        # Upper and lower triangular components
+        A_up = np.vstack((np.triu(A_comp, k=1), np.zeros(A_dim[0])))
+        A_dn = np.vstack((np.zeros(A_dim[0]), np.tril(A_comp)))
+
+        B_up = np.vstack((np.triu(B_comp, k=1), np.zeros(B_dim[0])))
+        B_dn = np.vstack((np.zeros(B_dim[0]), np.tril(B_comp)))
+ 
+        A_matrix = A_up + A_dn
+        B_matrix = B_up + B_dn
+
+        A_matrix += np.diag(1 - A_matrix.sum(axis=0))
+        B_matrix += np.diag(1 - B_matrix.sum(axis=0))
+
+        return A_matrix, B_matrix
 
     @staticmethod
     def _extract_parameters_symmetric(
@@ -356,6 +425,17 @@ if __name__ == "__main__":
         [0.05, 0.20, 0.70]
     ])
 
+    test_matrix_2 = np.array([
+        [0.80, 0.10, 0.20],
+        [0.05, 0.60, 0.30],
+        [0.15, 0.30, 0.50]
+    ])
+
     test = TestLikelihoodOptimizer()
-    encoded = test._encode_parameters(test_matrix, test_matrix)
-    decoded = test._extract_parameters(encoded, (3, 3), (3, 3))
+    encoded, dim_tuple = test._encode_parameters(test_matrix, test_matrix)
+    decoded = test._extract_parameters(encoded, *dim_tuple)
+
+    encoded_alt, dim_tuple = test._encode_parameters_alt(test_matrix, test_matrix_2)
+    decoded_alt = test._extract_parameters_alt(encoded_alt, *dim_tuple)
+
+    print("--DONE--")
