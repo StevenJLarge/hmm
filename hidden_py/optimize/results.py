@@ -14,20 +14,9 @@ class OptimizationResult(ABC):
         self._results = results
         self._report = None
 
-    @abstractmethod
-    def package_results(self):
-        pass
-
     @property
     def success(self) -> bool:
         return self._success
-
-    @property
-    def summary(self) -> Dict:
-        if self._report is None:
-            return self.package_results()
-        else:
-            return self._report
 
 
 class LikelihoodOptimizationResult(OptimizationResult):
@@ -42,15 +31,11 @@ class LikelihoodOptimizationResult(OptimizationResult):
         self.B = B_opt
         self.metadata = metadata
 
-    def package_results(self) -> Dict:
-        self._report = {
-            "trans_matrix_opt": self.A_opt,
-            "obs_matrix_opt": self.B_opt,
-            "final_likelihood": self.likelihood,
-            "success": self.success,
-            "metadata": list(self.metadata.keys())
-        }
-        return self._report
+    def __repr__(self):
+        return (
+            f'LikelihoodOptimizationResult(success={self.success}, '
+            f'algorithm={self._algo_name})'
+        )
 
 
 class EMOptimizationResult(OptimizationResult):
@@ -64,6 +49,12 @@ class EMOptimizationResult(OptimizationResult):
         self.A = A_opt
         self.B = B_opt
         self.metadata = metadata
+
+    def __repr__(self):
+        return (
+            f"EMOptimizationResult(success={self.success}, "
+            f"algorithm={self._algo_name}, iterations={self._iterations})"
+        )
 
     def package_results(self) -> Dict:
         self._report = {
