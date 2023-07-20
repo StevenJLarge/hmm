@@ -1,4 +1,4 @@
-hidden_py
+hidden-py
 =========
 
 .. toctree::
