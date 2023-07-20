@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import Optional, Iterable, Tuple, Union, Iterator
-from operator import mul
-from itertools import islice
+from typing import Optional, Iterable, Tuple, Union, Iterator, Dict
+from operator import mul, eq
+from functools import reduce
+from itertools import islice, chain
 import numpy as np
 import numba
 
@@ -21,9 +22,6 @@ class BaseOptimizer(ABC):
         self.result = None
         self.bayes_filter = None
         self.predictions = None
-
-    # def __repr__(self):
-    #     return f"{self.name}(status={self.status})"
 
     @staticmethod
     def _build_optimization_bounds(
@@ -46,9 +44,43 @@ class BaseOptimizer(ABC):
         """
         return [(lower_lim, upper_lim)] * n_params
 
-    def _build_optimization_constraints(self, n_params: int, dim_tuple: Tuple):
-        pass
+    def _build_optimization_constraints(
+        self, dim_tuple: Tuple, symmetric: bool
+    ) -> Tuple[Dict]:
+        if symmetric and any(d > 3 for d in chain(*dim_tuple)):
+            raise NotImplementedError(
+                'Local Likelihood optimization not currently supported for '
+                'symmetric constained matrices with dim > 3'
+            )
 
+        if symmetric:
+            return (
+                # Transition matrix constraints
+                {"type": "ineq", "fun": lambda x: 1 - (x[0] + x[1])},
+                {"type": "ineq", "fun": lambda x: 1 - (x[0] + x[2])},
+                # Observation matrix constraints
+                {"type": "ineq", "fun": lambda x: 1 - (x[3] + x[4])},
+                {"type": "ineq", "fun": lambda x: 1 - (x[3] + x[5])}
+            )
+
+        if not all(reduce(eq, d) for d in dim_tuple):
+            raise NotImplementedError(
+                "Constraint building is currently only supported for square "
+                "transition and observation matrices.."
+            )
+
+        n_const_trans = dim_tuple[0][0]
+        n_const_obs = dim_tuple[1][0]
+        const = []
+
+        for i in range(0, n_const_trans ** 2, n_const_trans):
+            const.append({"type": "ineq", "fun": lambda x: 1 - sum(x[i: i + n_const_trans])})
+
+        for i in range(0, n_const_obs ** 2, n_const_obs):
+            const.append({"type": "ineq", "fun": lambda x: 1 - sum(x[i: i + n_const_obs])})
+
+        return tuple(const)
+ 
     @abstractmethod
     def optimize(self):
         pass
@@ -58,7 +90,7 @@ class LikelihoodOptimizer(BaseOptimizer):
 
     @staticmethod
     def _encode_parameters_symmetric(
-        A: np.ndarray, B: np.ndarray
+        trans_mat: np.ndarray, obs_mat: np.ndarray
     ) -> Tuple[np.ndarray, Tuple]:
         """Encoding logic for input HMM transition (A) and abservation (B)
         matrices. Takes in (symmetric) matrices A and B and encodes them into
@@ -91,27 +123,27 @@ class LikelihoodOptimizer(BaseOptimizer):
             Tuple[np.ndarray, Tuple]: encoded param vector,
                 input matrix dimensions
         """
-        if A.shape[0] != A.shape[1] or B.shape[0] != B.shape[1]:
+        if trans_mat.shape[0] != trans_mat.shape[1] or obs_mat.shape[0] != obs_mat.shape[1]:
             raise ValueError("Input matrix not square...")
 
-        if not np.all(A == A.T) or not np.all(B == B.T):
+        if not np.all(trans_mat == trans_mat.T) or not np.all(obs_mat == obs_mat.T):
             raise ValueError(
-                'Input matrix `A` or `B` is not symmetric...'
+                'Input matrix `trans_mat` or `obs_mat` is not symmetric...'
             )
 
-        dim_tuple = (A.shape, B.shape)
-        A_entries = (mul(*A.shape) - A.shape[0]) // 2
-        B_entries = (mul(*B.shape) - B.shape[0]) // 2
-        encoded = np.zeros(A_entries + B_entries)
+        dim_tuple = (trans_mat.shape, obs_mat.shape)
+        trans_entries = (mul(*trans_mat.shape) - trans_mat.shape[0]) // 2
+        obs_entries = (mul(*obs_mat.shape) - obs_mat.shape[0]) // 2
+        encoded = np.zeros(trans_entries + obs_entries)
 
-        encoded[:A_entries] = A[np.triu_indices(A.shape[0], k=1)]
-        encoded[A_entries:] = B[np.triu_indices(B.shape[0], k=1)]
+        encoded[:trans_entries] = trans_mat[np.triu_indices(trans_mat.shape[0], k=1)]
+        encoded[trans_entries:] = obs_mat[np.triu_indices(obs_mat.shape[0], k=1)]
 
         return encoded, dim_tuple
 
     @staticmethod
     def _encode_parameters(
-        A: np.ndarray, B: np.ndarray
+        trans_mat: np.ndarray, obs_mat: np.ndarray
     ) -> Tuple[np.ndarray, Tuple]:
         """Encodes input (non-symmetric, or not-necessarily symmetric) matrices
         for transitions (A) and observations (B) into a 1-d parameter vector
@@ -120,35 +152,91 @@ class LikelihoodOptimizer(BaseOptimizer):
 
         Note that because the input matrices are both stochastic matrices, the
         columns are normalized and so the diagonal entries are not independent
-        parameters, so they do not get included in the encoded vector
+        parameters, so they do not get included in the encoded vector. The
+        compressed output is stored in a column-major format, as we want to
+        impose constraints on column-wise sums for systems with dimesion > 2
+        during the optimization
 
         EXAMPLE
 
         INPUTS:
-        A = [0.8, 0.3]      B = [0.9, 0.15]
-            [0.2, 0.7]          [0.1, 0.85]
+        A_1 = [0.8, 0.3]      B_1 = [0.9, 0.15]
+              [0.2, 0.7]            [0.1, 0.85]
+
+        A_2
 
         OUTPUTS:
         encoded: [0.3, 0.2, 0.15, 0.1]
         dim_tuple: ((2,2), (2,2))
 
         Args:
-            A (np.ndarray): transition matrix for hidden states
-            B (np.ndarray): matrix for symbol emmissions (observations)
+            trans_mat (np.ndarray): transition matrix for hidden states
+            obs_mat (np.ndarray): matrix for symbol emmissions (observations)
 
         Returns:
             Tuple[np.ndarray, Tuple]: encoded param vector,
                 input matrix dimensions
         """
-        encoded = np.zeros(mul(*A.shape) + mul(*B.shape) - A.shape[0] - B.shape[0])
-        dim_tuple = (A.shape, B.shape)
-        # Compress the diagonal entries out of A and B
-        A_compressed = np.triu(A, k=1)[:, 1:] + np.tril(A, k=-1)[:, :-1]
-        B_compressed = np.triu(B, k=1)[:, 1:] + np.tril(B, k=-1)[:, :-1]
-        # Encode the off-diagonals into a vector
-        encoded[: mul(*A.shape) - A.shape[0]] = np.ravel(A_compressed)
-        encoded[mul(*A.shape) - A.shape[0]:] = np.ravel(B_compressed)
+        encoded = np.zeros(mul(*trans_mat.shape) + mul(*obs_mat.shape) - trans_mat.shape[0] - obs_mat.shape[0])
+        dim_tuple = (trans_mat.shape, obs_mat.shape)
+
+        trans_flat = np.ravel(trans_mat, order='F')
+        obs_flat = np.ravel(obs_mat, order='F')
+        trans_compressed = np.delete(trans_flat, slice(0, len(trans_flat), trans_mat.shape[0] + 1))
+        obs_compressed = np.delete(obs_flat, slice(0, len(obs_flat), obs_mat.shape[0] + 1))
+
+        encoded[: mul(*trans_mat.shape) - trans_mat.shape[0]] = trans_compressed
+        encoded[mul(*trans_mat.shape) - trans_mat.shape[0]:] = obs_compressed
+
         return encoded, dim_tuple
+
+    @staticmethod
+    def _extract_parameters(
+        param_arr: Union[np.ndarray, Tuple], trans_mat_dim: Tuple,
+        obs_mat_dim: Tuple
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Code to decode/extract (non-symmetric or not-necessarily symmetric)
+        HMM model parameters from an input parameter array that has been
+        encoded using `_encode_parameters` (i.e. this is the inverse operation)
+
+        EXAMPLE
+
+        INPUTS:
+        param_arr = [0.2, 0.3, 0.1, 0.15],  A_dim = (2, 2),  B_dim = (2, 2)
+
+        OUTPUT:
+        A = [0.7, 0.2]      B = [0.85, 0.1]
+            [0.3, 0.8]          [0.15, 0.9]
+
+        Args:
+            param_arr (Union[np.ndarray, Tuple]): encoded parameter array
+            A_dim (Tuple): dimensions of transition matrix
+            B_dim (Tuple): dimenstions of observation matrix
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: transition matrix (A),
+                observation matrix (B)
+        """
+        trans_comp = param_arr[:mul(*trans_mat_dim) - trans_mat_dim[0]]
+        obs_comp = param_arr[mul(*trans_mat_dim) - trans_mat_dim[0]:]
+
+        trans_comp = trans_comp.reshape(trans_mat_dim[1], trans_mat_dim[0] - 1).T
+        obs_comp = obs_comp.reshape(obs_mat_dim[1], obs_mat_dim[0] - 1).T
+
+        # Upper and lower triangular components
+        trans_up = np.vstack((np.triu(trans_comp, k=1), np.zeros(trans_mat_dim[0])))
+        trans_dn = np.vstack((np.zeros(trans_mat_dim[0]), np.tril(trans_comp)))
+
+        obs_up = np.vstack((np.triu(obs_comp, k=1), np.zeros(obs_mat_dim[0])))
+        obs_dn = np.vstack((np.zeros(obs_mat_dim[0]), np.tril(obs_comp)))
+ 
+        trans_matrix = trans_up + trans_dn
+        obs_matrix = obs_up + obs_dn
+
+        trans_matrix += np.diag(1 - trans_matrix.sum(axis=0))
+        obs_matrix += np.diag(1 - obs_matrix.sum(axis=0))
+
+        return trans_matrix, obs_matrix
 
     @staticmethod
     def _extract_parameters_symmetric(
@@ -197,65 +285,7 @@ class LikelihoodOptimizer(BaseOptimizer):
         return trans_mat, obs_mat
 
     @staticmethod
-    def _extract_parameters(
-        param_arr: Union[np.ndarray, Tuple], A_dim: Tuple, B_dim: Tuple,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Code to decode/extract (non-symmetric or not-necessarily symmetric)
-        HMM model parameters from an input parameter array that has been
-        encoded using `_encode_parameters` (i.e. this is the inverse operation)
-
-        EXAMPLE
-
-        INPUTS:
-        param_arr = [0.2, 0.3, 0.1, 0.15],  A_dim = (2, 2),  B_dim = (2, 2)
-
-        OUTPUT:
-        A = [0.7, 0.2]      B = [0.85, 0.1]
-            [0.3, 0.8]          [0.15, 0.9]
-
-        Args:
-            param_arr (Union[np.ndarray, Tuple]): encoded parameter array
-            A_dim (Tuple): dimensions of transition matrix
-            B_dim (Tuple): dimenstions of observation matrix
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: transition matrix (A),
-                observation matrix (B)
-        """
-
-        # If this is passed in as a tuple, cast to numpy array
-        param_arr = np.array(param_arr)
-
-        # Take the dimension to be the 'true' dimension, less the diagonal terms
-        A_size = A_dim[0] * A_dim[1] - A_dim[0]
-
-        # Pull out A, and B specific parameters
-        trans_mat = param_arr[:A_size]
-        obs_mat = param_arr[A_size:]
-
-        trans_mat = trans_mat.reshape(A_dim[0], A_dim[1] - 1)
-        obs_mat = obs_mat.reshape(B_dim[0], B_dim[1] - 1)
-
-        # Now reconstruct the trans matrix diagonal elements: first the
-        # following line will add a diagonal of zeros, note this assumes that
-        # the matrix is condensed along axis 1
-        trans_mat = (
-            np.hstack((np.zeros((A_dim[0], 1)), np.triu(trans_mat)))
-            + np.hstack((np.tril(trans_mat, k=-1), np.zeros((A_dim[0], 1))))
-        )
-
-        obs_mat = (
-            np.hstack((np.zeros((B_dim[0], 1)), np.triu(obs_mat)))
-            + np.hstack((np.tril(obs_mat, k=-1), np.zeros((B_dim[0], 1))))
-        )
-        # Add in diagonal terms so that sum(axis=0) = 1
-        trans_mat += np.eye(trans_mat.shape[0], M=trans_mat.shape[1]) - np.diag(trans_mat.sum(axis=0))
-        obs_mat += np.eye(obs_mat.shape[0], M=obs_mat.shape[1]) - np.diag(obs_mat.sum(axis=0))
-
-        return trans_mat, obs_mat
-
-    @staticmethod
-    # @numba.jit(nopython=True)
+    @numba.jit(nopython=True)
     def _likelihood(
         predictions: np.ndarray, obs_ts: np.ndarray, B: np.ndarray
     ) -> float:
@@ -274,11 +304,7 @@ class LikelihoodOptimizer(BaseOptimizer):
         likelihood = 0
         for i, obs in enumerate(obs_ts):
             inner = predictions[i, :] @ B[obs, :]
-            if inner <= 0:
-                print("OOPS!")
             likelihood -= np.log(inner)
-            if likelihood == np.nan:
-                print('Hmmm...')
         return likelihood
 
     @staticmethod
@@ -327,3 +353,27 @@ class TestLikelihoodOptimizer(LikelihoodOptimizer):
     def optimize(self):
         pass
 
+
+if __name__ == "__main__":
+    # Testing the encoding / decoding logic
+
+    test_matrix = np.array([
+        [0.80, 0.10, 0.20],
+        [0.15, 0.70, 0.10],
+        [0.05, 0.20, 0.70]
+    ])
+
+    test_matrix_2 = np.array([
+        [0.80, 0.10, 0.20],
+        [0.05, 0.60, 0.30],
+        [0.15, 0.30, 0.50]
+    ])
+
+    test = TestLikelihoodOptimizer()
+    encoded, dim_tuple = test._encode_parameters(test_matrix, test_matrix)
+    decoded = test._extract_parameters(encoded, *dim_tuple)
+
+    encoded_alt, dim_tuple = test._encode_parameters_alt(test_matrix, test_matrix_2)
+    decoded_alt = test._extract_parameters_alt(encoded_alt, *dim_tuple)
+
+    print("--DONE--")

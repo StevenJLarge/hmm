@@ -1,6 +1,7 @@
 from typing import Iterable, Tuple, Optional, Union
 import warnings
 import numba
+import itertools
 from operator import mul
 import numpy as np
 import scipy.optimize as so
@@ -24,6 +25,9 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         """
         self.algo = algorithm
         super().__init__()
+
+    def __repr__(self):
+        return f"LocalLikelihoodOptimizer(algorithm={self.algo})"
 
     def optimize(
         self, obs_ts: Iterable, A_guess: np.ndarray, B_guess: np.ndarray,
@@ -56,8 +60,10 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         opt_args = (dim_tuple, obs_ts, symmetric)
         # Parameter bounds in optimization
         bnds = self._build_optimization_bounds(len(param_init))
-        # if any(dim_tuple > 2):
-            # const = self._build_optimization_constraints()
+        if any(d > 2 for d in itertools.chain(*dim_tuple)):
+            const = self._build_optimization_constraints(dim_tuple, symmetric)
+        else:
+            const = ()
 
         # run optimizer
         self.result = so.minimize(
@@ -65,7 +71,8 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
             x0=param_init,
             args=opt_args,
             method=self.algo,
-            bounds=bnds
+            bounds=bnds,
+            constraints=const
         )
 
         # Return results
@@ -92,6 +99,9 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
         """
         self.algo = sampling_algorithm
         super().__init__()
+
+    def __repr__(self):
+        return f"GlobalLikelihoodOptimizer(sampling_algorithm={self.algo})"
 
     def _get_num_params(self, dim_tuple: Tuple, symmetric: bool) -> int:
         """Utility function to determine the number fo parameters from the input
@@ -148,9 +158,14 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
         opt_args = (dim_tuple, obs_ts, symmetric)
         n_params = self._get_num_params(dim_tuple, symmetric)
         bnds = self._build_optimization_bounds(n_params)
+        if any(d > 2 for d in itertools.chain(*dim_tuple)):
+            const = self._build_optimization_constraints(dim_tuple, symmetric)
+        else:
+            const = None
 
         self.result = so.shgo(
             func=LikelihoodOptimizer.calc_likelihood,
+            constraints=const,
             bounds=bnds,
             args=opt_args,
             sampling_method=self.algo
@@ -209,6 +224,12 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         self._track = track_optimization
         self._interval = tracking_interval
         self._update_norm = tracking_norm
+
+    def __repr__(self):
+        return (
+            f"EMOptimizer(threshold={self._opt_threshold}, "
+            f"maxiter={self._max_iter}, track_optimization={self._track})"
+        )
 
     @staticmethod
     # @numba.jit(nopython=True)
@@ -505,12 +526,16 @@ if __name__ == "__main__":
     ])
 
     A_test_3 = np.array([
-        [0.80, 0.10, 0.15],
-        [0.15, 0.85, 0.10],
-        [0.05, 0.05, 0.75]
+        [0.75, 0.10, 0.15],
+        [0.10, 0.80, 0.10],
+        [0.15, 0.10, 0.75]
     ])
 
-    B_test_3 = B_3
+    B_test_3 = np.array([
+        [0.90, 0.05, 0.05],
+        [0.05, 0.85, 0.10],
+        [0.05, 0.10, 0.85]
+    ])
 
     param_init_legacy = [0.2, 0.05]
     start_leg = time.time()
@@ -526,6 +551,7 @@ if __name__ == "__main__":
 
     start_new_sym = time.time()
     res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
+    res3 = opt.optimize(obs_ts_3, A_test_3, B_test_3, symmetric=True)
     end_new_sym = time.time()
 
     start_new_em = time.time()
