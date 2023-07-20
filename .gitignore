@@ -1,6 +1,5 @@
 *.pyc
 /reports/**
-/docs/*
 /notebooks/personal/**
 /data/**
 .env
