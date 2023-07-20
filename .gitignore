@@ -1,4 +1,5 @@
 *.pyc
+/docs/figures/**
 /reports/**
 /notebooks/personal/**
 /data/**
