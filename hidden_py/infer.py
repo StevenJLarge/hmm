@@ -253,54 +253,29 @@ class MarkovInfer:
 
 
 if __name__ == "__main__":
-    from hidden_py import dynamics
-    import time
-    hmm = dynamics.HMM(2, 2)
-    hmm3 = dynamics.HMM(3, 3)
+    import hidden_py as hp
+    import pandas as pd
+    from pathlib import Path
+    analyzer = hp.infer.MarkovInfer(3, 3)
 
-    hmm.init_uniform_cycle()
-    hmm.run_dynamics(1000)
+    A3_init = np.array([
+        [0.70, 0.2,0.75],
+        [0.20, 0.7,0.15],
+        [0.10,0.1,0.1]
+    ])
 
-    hmm3.init_uniform_cycle()
-    hmm3.run_dynamics(500)
+    B3_init = np.array([
+        [0.85, 0.10,0.10],
+        [0.05, 0.80,0.20],
+        [0.10,0.10,0.70]
+    ])
 
-    state_ts = hmm.get_state_ts()
-    obs_ts = hmm.get_obs_ts()
+    # read_dir = Path(__file__).parents[1] / "data"
+    # df_spx = pd.read_csv(read_dir / "df_spx.csv", index_col=0)
 
-    state_ts = hmm3.get_state_ts()
-    obs_ts3 = hmm3.get_obs_ts()
-
-    BayesInfer = MarkovInfer(2, 2)
-    BayesInfer3 = MarkovInfer(3, 3)
-    param_init = (0.15, 0.15)
-    A_init = np.array([[0.85, 0.15], [0.15, 0.85]])
-    B_init = np.array([[0.85, 0.15], [0.15, 0.85]])
-
-    BayesInfer.forward_algo(obs_ts, hmm.A, hmm.B)
-    BayesInfer.backward_algo(obs_ts, hmm.A, hmm.B)
-    BayesInfer.bayesian_smooth(obs_ts, hmm.A, hmm.B)
-
-    BayesInfer.alpha(obs_ts, hmm.A, hmm.B)
-    BayesInfer.beta(obs_ts, hmm.A, hmm.B)
-
-    res_loc = BayesInfer.optimize(obs_ts, A_init, B_init, symmetric=True)
-    res_glo = BayesInfer.optimize(
-        obs_ts, A_init, B_init, symmetric=True, opt_type=OptClass.Global
-    )
-
-    res_loc3 = BayesInfer3.optimize(obs_ts3, hmm3.A, hmm3.B, opt_type=OptClass.Local)
-
-    start_bw = time.time()
-    res_bw = BayesInfer.optimize(
-        obs_ts, A_init, B_init, opt_type=OptClass.ExpMax,
-        algo_opts={
-            "track_optimization": True, "tracking_interval": 10,
-            "maxiter": 200, "testing": "THIS IS A TEST"
-        }
-    )
-    end_bw = time.time()
-    # res_bw = BayesInfer.baum_welch(param_init, obs_ts, maxiter=10)
-
-    print(f"BW Runtime: {round(end_bw - start_bw, 4)}")
+    # res = analyzer.optimize(
+    #     df_spx.loc[:252].to_numpy() + 1, A3_init, B3_init,
+    #     opt_type=hp.OptClass.ExpMax
+    # )
 
     print("--DONE--")
