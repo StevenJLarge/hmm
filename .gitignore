@@ -7,3 +7,4 @@
 /dist/*
 /build/*
 PUBLISH.sh
+hidden_py.egg-info/PKG-INFO
