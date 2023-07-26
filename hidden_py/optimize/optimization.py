@@ -185,10 +185,11 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
 
 class EMOptimizer(CompleteLikelihoodOptimizer):
     def __init__(
-        self, threshold: Optional[float] = 1e-8, maxiter: Optional[int] = 5000,
-        track_optimization: Optional[Union[bool, int]] = False,
-        tracking_interval: Optional[int] = 100,
-        tracking_norm: Optional[str] = 'fro',
+        self, threshold: float = 1e-8, maxiter: int = 5000,
+        track_optimization: Union[bool, int] = False,
+        tracking_interval: int = 100,
+        tracking_norm: str = 'fro',
+        laplace_factor: float=1e-5,
         **kwargs
     ) -> None:
         """Constructor for Expectation-Maximization optimizer
@@ -210,6 +211,8 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
                 `scipy.linalg.norm`
                 (https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.norm.html).
                 Defaults to 'fro' (Frobenius).
+            laplace_factor float: laplace smoothing factor used for handling
+                scenarios where a state is unobserved
         """
         if len(kwargs) > 0:
             warnings.warn(
@@ -224,6 +227,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         self._track = track_optimization
         self._interval = tracking_interval
         self._update_norm = tracking_norm
+        self._laplace = laplace_factor
 
     def __repr__(self):
         return (
@@ -346,7 +350,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
     @staticmethod
     def _update_observation_matrix(
-        obs_ts: np.ndarray, bayes: np.ndarray
+        obs_ts: np.ndarray, bayes: np.ndarray, laplace: float
     ) -> np.ndarray:
         """Routine to update the observation matrix, based on recorded
         observations and the bayesian state estiamtes. See supporting
@@ -367,7 +371,19 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             gamma_mat[:, :, i] = EMOptimizer._gamma_numer(obs, i, bayes)
         gamma_denom = np.vstack(bayes.shape[1] * [bayes.T]).reshape(gamma_mat.shape)
 
-        return (gamma_mat.sum(axis=2) / gamma_denom.sum(axis=2))
+        updated = (gamma_mat.sum(axis=2) / gamma_denom.sum(axis=2))
+
+        if np.any(updated == 0):
+            print("Laplace!")
+        # Laplace smoothing for scenarios where there is an unobserved state
+        if np.any(updated == 0):
+            updated += laplace
+            updated /= updated.sum(axis=0)
+
+        if np.any(updated == 0):
+            raise RuntimeWarning("Sad...")
+
+        return updated
 
     def baum_welch_step(
         self, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
@@ -396,7 +412,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             obs_ts, trans_matrix, obs_matrix, _alpha, _beta, _bayes
         )
         obs_matrix_updated = EMOptimizer._update_observation_matrix(
-            obs_ts, _bayes
+            obs_ts, _bayes, self._laplace
         )
 
         return trans_matrix_updated, obs_matrix_updated
@@ -468,99 +484,49 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 if __name__ == "__main__":
     import time
     # import os
-    from hidden_py import dynamics, infer
-    from hidden_py.optimize.base import OptClass
-    # testing routines here, lets work with symmetric ''true' matrices
-    A = np.array([
-        [0.7, 0.3],
-        [0.3, 0.7]
-    ])
+    import hidden_py as hp
+    from hidden_py.optimize import optimization
+    # for warning handling
+    import warnings
 
-    A_3 = np.array([
-        [0.80, 0.05, 0.05],
-        [0.15, 0.85, 0.20],
-        [0.05, 0.10, 0.75]
-    ])
+    # replicating test
+    n_iterations = 100
 
-    B = np.array([
-        [0.9, 0.1],
-        [0.1, 0.9]
-    ])
+    # Force warnings to be raised as errors
+    warnings.simplefilter("error", category=RuntimeWarning)
 
-    B_3 = np.array([
-        [0.90, 0.05, 0.10],
-        [0.05, 0.85, 0.05],
-        [0.05, 0.10, 0.85]
-    ])
-
-    hmm = dynamics.HMM(2, 2)
-    hmm3 = dynamics.HMM(3, 3)
-    hmm.initialize_dynamics(A, B)
-    hmm3.initialize_dynamics(A_3, B_3)
-    hmm.run_dynamics(500)
-    hmm3.run_dynamics(500)
-    obs_ts = hmm.get_obs_ts()
-    obs_ts_3 = hmm3.get_obs_ts()
-
-    analyzer = infer.MarkovInfer(2, 2)
-    analyzer3 = infer.MarkovInfer(3, 3)
-
-    A_test = np.array([
-        [0.75, 0.25],
-        [0.25, 0.75]
-    ])
-
-    A_test_sym = np.array([
-        [0.8, 0.2],
-        [0.2, 0.8]
-    ])
-
-    B_test = np.array([
-        [0.95, 0.20],
-        [0.05, 0.80]
-    ])
-
-    B_test_sym = np.array([
-        [0.95, 0.05],
-        [0.05, 0.95]
-    ])
+    A_test_2 = np.array([[0.7, 0.2], [0.3, 0.8]])
+    B_test_2 = np.array([[0.9, 0.01], [0.1, 0.99]])
 
     A_test_3 = np.array([
-        [0.75, 0.10, 0.15],
-        [0.10, 0.80, 0.10],
-        [0.15, 0.10, 0.75]
+        [0.8, 0.1, 0.2],
+        [0.1, 0.7, 0.2],
+        [0.1, 0.2, 0.6]
     ])
-
     B_test_3 = np.array([
-        [0.90, 0.05, 0.05],
-        [0.05, 0.85, 0.10],
-        [0.05, 0.10, 0.85]
+        [0.98, 0.1, 0.4],
+        [0.01, 0.7, 0.3],
+        [0.01, 0.2, 0.3]
     ])
 
-    param_init_legacy = [0.2, 0.05]
-    start_leg = time.time()
-    # legacy_res = analyzer.max_likelihood(param_init_legacy, obs_ts)
-    end_leg = time.time()
-    opt = LocalLikelihoodOptimizer(algorithm="SLSQP")
-    opt_em = EMOptimizer()
 
-    start_new_nonsym = time.time()
-    res_nosym = opt.optimize(obs_ts, A_test, B_test)
-    res_nosym3 = opt.optimize(obs_ts_3, A_test_3, B_test_3)
-    end_new_nonsym = time.time()
+    opt2 = optimization.EMOptimizer()
+    opt3 = optimization.EMOptimizer()
 
-    start_new_sym = time.time()
-    res = opt.optimize(obs_ts, A_test_sym, B_test_sym, symmetric=True)
-    res3 = opt.optimize(obs_ts_3, A_test_3, B_test_3, symmetric=True)
-    end_new_sym = time.time()
+    for i in range(n_iterations):
+        hmm = hp.dynamics.HMM(2, 2)
+        hmm3 = hp.dynamics.HMM(3, 3)
+        
+        hmm.init_uniform_cycle()
+        hmm3.init_uniform_cycle()
 
-    start_new_em = time.time()
-    res_em = opt_em.optimize(np.array(obs_ts), A_test, B_test)
-    res_em_2 = analyzer.optimize(obs_ts, A_test, B_test, opt_type=OptClass.ExpMax)
-    end_new_em = time.time()
+        hmm.run_dynamics(10)
+        hmm3.run_dynamics(10)
 
-    print(f"Time Leg    : {end_leg - start_leg}")
-    print(f"Time NonSym : {end_new_nonsym - start_new_nonsym}")
-    print(f"Time Sym    : {end_new_sym - start_new_sym}")
+        obs_ts = np.array(hmm.get_obs_ts())
+        obs_ts_3 = np.array(hmm3.get_obs_ts())
+
+        A_new_2, B_new_2 = opt2.baum_welch_step(A_test_2, B_test_2, obs_ts)
+        A_new_3, B_new_3 = opt3.baum_welch_step(A_test_3, B_test_3, obs_ts)
 
     print("--DONE--")
