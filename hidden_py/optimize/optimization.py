@@ -373,15 +373,10 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
         updated = (gamma_mat.sum(axis=2) / gamma_denom.sum(axis=2))
 
-        if np.any(updated == 0):
-            print("Laplace!")
         # Laplace smoothing for scenarios where there is an unobserved state
         if np.any(updated == 0):
             updated += laplace
             updated /= updated.sum(axis=0)
-
-        if np.any(updated == 0):
-            raise RuntimeWarning("Sad...")
 
         return updated
 
