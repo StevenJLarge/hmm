@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: hidden-py
-Version: 1.0.7
+Version: 1.0.10
 Summary: A python package for discrete-output hidden Markov models
 Author: Steven Large
 Author-email: stevelarge7@gmail.com
