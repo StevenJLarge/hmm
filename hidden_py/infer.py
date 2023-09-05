@@ -237,6 +237,7 @@ class MarkovInfer:
             )
         observations = self._validate_input(observations)
         # For the global optimizer, dim_tuple, but no initial guesses
+        # TODO -- Add verbose option to suppress output
         optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
         if (opt_type is OptClass.Global):
             print("Running global partial-data likelihood optimization...")
@@ -279,7 +280,17 @@ if __name__ == "__main__":
 
     data_ind = res._agg_results['dev_equity']._results["fixed_time"]['canada_equity'].indicator.dropna().to_numpy() + 1
 
-    opt_res = analyzer.optimize(data_ind[:252], A3_init, B3_init, opt_type=OptClass.ExpMax)
+    res_ca_eq = {}
+    WIN_SIZE = 252
+
+    for i, idx in enumerate(range(0, len(data_ind[:-WIN_SIZE]), 63)):
+        print(f"idx = {idx}")
+        if i % 10 == 0:
+            print(f"Working on idx {i} (of {len(data_ind[:-WIN_SIZE:63])})")
+        _res = analyzer.optimize(data_ind[idx: idx + WIN_SIZE], A3_init, B3_init, opt_type=hp.OptClass.ExpMax)
+        res_ca_eq[str(idx)] = _res
+
+    # opt_res = analyzer.optimize(data_ind[:252], A3_init, B3_init, opt_type=OptClass.ExpMax)
 
     # read_dir = Path(__file__).parents[1] / "data"
     # df_spx = pd.read_csv(read_dir / "df_spx.csv", index_col=0)

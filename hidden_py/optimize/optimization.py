@@ -189,7 +189,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         track_optimization: Union[bool, int] = False,
         tracking_interval: int = 100,
         tracking_norm: str = 'fro',
-        laplace_factor: float=1e-5,
+        laplace_factor: float=1e-10,
         **kwargs
     ) -> None:
         """Constructor for Expectation-Maximization optimizer
@@ -285,6 +285,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             ).reshape(numer.shape).T
 
             # Set the time-t element of the resulting xi matrix
+            # TODO -- fix this warning so that we never actually set anything to NaN
             xi[:, :, t - 1] = numer / denom
             # In cases where the denominator goes to zero, the neumerator is
             # also zero and we can just define those as zero elements
@@ -316,7 +317,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
     # @numba.jit(nopython=True)
     def _update_transition_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
-        alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray
+        alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray, laplace: float
     ) -> np.ndarray:
         """Baum-Welch update to transition matrix. This routine calls the
         calculation of the xi-matrix (joint probability term) and divides the
@@ -348,6 +349,11 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             trans_matrix.shape[1],
             axis=0
         )
+
+        # Laplace smoothing for scenarios where inferred transition rate is zero
+        if np.any(trans_matrix_updated == 0):
+            trans_matrix_updated += laplace
+            trans_matrix_updated /= trans_matrix_updated.sum(axis=0)
 
         trans_matrix_updated = ratio * bayes_matrix
         return trans_matrix_updated
@@ -408,7 +414,8 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
         # Maximization step: update matrices
         trans_matrix_updated = EMOptimizer._update_transition_matrix(
-            obs_ts, trans_matrix, obs_matrix, _alpha, _beta, _bayes
+            obs_ts, trans_matrix, obs_matrix, _alpha, _beta, _bayes,
+            self.laplace
         )
         obs_matrix_updated = EMOptimizer._update_observation_matrix(
             obs_ts, _bayes, self._laplace
