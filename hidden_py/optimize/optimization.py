@@ -286,6 +286,10 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
             # Set the time-t element of the resulting xi matrix
             xi[:, :, t - 1] = numer / denom
+            # In cases where the denominator goes to zero, the neumerator is
+            # also zero and we can just define those as zero elements
+            if np.isnan(xi[:, :, t-1]).any():
+                xi[:, :, t-1] = np.nan_to_num(xi[:, :, t-1], nan=0.0)
 
         # Return the sum over all points in time
         return xi.sum(axis=2)
