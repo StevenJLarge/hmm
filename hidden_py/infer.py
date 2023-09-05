@@ -256,7 +256,9 @@ if __name__ == "__main__":
     import hidden_py as hp
     import pandas as pd
     from pathlib import Path
-    analyzer = hp.infer.MarkovInfer(3, 3)
+    import pickle
+
+    analyzer = MarkovInfer(3, 3)
 
     A3_init = np.array([
         [0.70, 0.2,0.75],
@@ -269,6 +271,15 @@ if __name__ == "__main__":
         [0.05, 0.80,0.20],
         [0.10,0.10,0.70]
     ])
+
+    proj_dir = Path(__file__).parents[1]
+    read_dir = proj_dir / "data" / "triple_barrier_dt_21_nsig_0.5"
+    with open(read_dir / "triple_barrier.pkl", "rb") as f:
+        res = pickle.load(f)
+
+    data_ind = res._agg_results['dev_equity']._results["fixed_time"]['canada_equity'].indicator.dropna().to_numpy() + 1
+
+    opt_res = analyzer.optimize(data_ind[:252], A3_init, B3_init, opt_type=OptClass.ExpMax)
 
     # read_dir = Path(__file__).parents[1] / "data"
     # df_spx = pd.read_csv(read_dir / "df_spx.csv", index_col=0)
