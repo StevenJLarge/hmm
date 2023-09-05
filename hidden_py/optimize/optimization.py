@@ -350,12 +350,13 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             axis=0
         )
 
+        trans_matrix_updated = ratio * bayes_matrix
+
         # Laplace smoothing for scenarios where inferred transition rate is zero
         if np.any(trans_matrix_updated == 0):
             trans_matrix_updated += laplace
             trans_matrix_updated /= trans_matrix_updated.sum(axis=0)
 
-        trans_matrix_updated = ratio * bayes_matrix
         return trans_matrix_updated
 
     @staticmethod
