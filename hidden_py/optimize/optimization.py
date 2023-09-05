@@ -415,7 +415,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         # Maximization step: update matrices
         trans_matrix_updated = EMOptimizer._update_transition_matrix(
             obs_ts, trans_matrix, obs_matrix, _alpha, _beta, _bayes,
-            self.laplace
+            self._laplace
         )
         obs_matrix_updated = EMOptimizer._update_observation_matrix(
             obs_ts, _bayes, self._laplace
