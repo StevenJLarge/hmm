@@ -23,26 +23,12 @@ jobs:
         with:
           python-version: 3.x
 
-      - name: Check if setup.py version changed
-        run: |
-          git fetch origin master:master
-          DIFF=$(git diff master -- setup.py)
-          if [[ -z $DIFF ]]; then
-            echo "No changes in setup.py version. Skipping package publishing"
-            echo ::set-ouput name=skip_publish::true
-          else
-            echo "Changes detected in setup.py version, continuing with package publication"
-            echo ::set-output name=skip_publish::true
-          fi
-
       - name: Install publishing dependencies
-        if: steps.version_changed.outputs.skip_publish == 'false'
         run: |
           python -m pip install --upgrade pip
           pip install setuptools wheel twine
 
       - name: Build and Publish
-        if: steps.version_changed.outputs.skip_publish == 'false'
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
