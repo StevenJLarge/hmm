@@ -3,8 +3,7 @@ name: Publish package version to pypi
 on:
   workflow_run:
     workflows: [python-testing]
-    types:
-      - completed
+    types: [completed]
   workflow_dispatch:
 
 jobs:
