@@ -205,9 +205,9 @@ class MarkovInfer:
 
     def optimize(
         self, observations: Iterable, trans_init: np.ndarray,
-        obs_init: np.ndarray, symmetric: Optional[bool] = False,
-        opt_type: Optional[OptClass] = OptClass.Local,
-        algo_opts: Optional[Dict] = {}
+        obs_init: np.ndarray, symmetric: bool = False,
+        opt_type: OptClass = OptClass.Local, algo_opts: Dict = {},
+        verbose: bool = False
     ) -> OptimizationResult:
         """Main entrypoint for optimizing an internal model
 
@@ -240,16 +240,19 @@ class MarkovInfer:
         # TODO -- Add verbose option to suppress output
         optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
         if (opt_type is OptClass.Global):
-            print("Running global partial-data likelihood optimization...")
+            if verbose:
+                print("Running global partial-data likelihood optimization...")
             dim_tuple = (trans_init.shape, obs_init.shape)
             return optimizer.optimize(observations, dim_tuple, symmetric)
 
         # For EM opt, there is no option to input a symmetric constraint
         elif (opt_type is OptClass.ExpMax):
-            print("Running Baum-Welch (EM) optimization...")
+            if verbose:
+                print("Running Baum-Welch (EM) optimization...")
             return optimizer.optimize(observations, trans_init, obs_init)
 
-        print("Running local partial-data likelihood optimization...")
+        if verbose:
+            print("Running local partial-data likelihood optimization...")
         return optimizer.optimize(observations, trans_init, obs_init, symmetric)
 
 
@@ -273,31 +276,5 @@ if __name__ == "__main__":
         [0.10,0.10,0.70]
     ])
 
-    proj_dir = Path(__file__).parents[1]
-    read_dir = proj_dir / "data" / "triple_barrier_dt_21_nsig_0.5"
-    with open(read_dir / "triple_barrier.pkl", "rb") as f:
-        res = pickle.load(f)
-
-    data_ind = res._agg_results['dev_equity']._results["fixed_time"]['canada_equity'].indicator.dropna().to_numpy() + 1
-
-    res_ca_eq = {}
-    WIN_SIZE = 252
-
-    for i, idx in enumerate(range(0, len(data_ind[:-WIN_SIZE]), 63)):
-        print(f"idx = {idx}")
-        if i % 10 == 0:
-            print(f"Working on idx {i} (of {len(data_ind[:-WIN_SIZE:63])})")
-        _res = analyzer.optimize(data_ind[idx: idx + WIN_SIZE], A3_init, B3_init, opt_type=hp.OptClass.ExpMax)
-        res_ca_eq[str(idx)] = _res
-
-    # opt_res = analyzer.optimize(data_ind[:252], A3_init, B3_init, opt_type=OptClass.ExpMax)
-
-    # read_dir = Path(__file__).parents[1] / "data"
-    # df_spx = pd.read_csv(read_dir / "df_spx.csv", index_col=0)
-
-    # res = analyzer.optimize(
-    #     df_spx.loc[:252].to_numpy() + 1, A3_init, B3_init,
-    #     opt_type=hp.OptClass.ExpMax
-    # )
 
     print("--DONE--")
