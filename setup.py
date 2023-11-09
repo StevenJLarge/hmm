@@ -22,7 +22,8 @@ setup(
         'scipy',
         'matplotlib',
         'seaborn >= 0.11.1',
-        'numba'
+        'numba',
+        'loguru'
     ],
     project_urls={
         'Source': 'https://github.com/StevenJLarge/hmm'
