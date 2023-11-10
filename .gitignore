@@ -9,3 +9,4 @@
 PUBLISH.sh
 PUBLISH.md
 hidden_py.egg-info/PKG-INFO
+hidden_py.egg-info/*

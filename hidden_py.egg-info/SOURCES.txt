@@ -4,6 +4,7 @@ setup.py
 hidden_py/__init__.py
 hidden_py/dynamics.py
 hidden_py/infer.py
+hidden_py/log_setup.py
 hidden_py.egg-info/PKG-INFO
 hidden_py.egg-info/SOURCES.txt
 hidden_py.egg-info/dependency_links.txt

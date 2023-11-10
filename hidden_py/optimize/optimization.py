@@ -104,12 +104,12 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
         return f"GlobalLikelihoodOptimizer(sampling_algorithm={self.algo})"
 
     def _get_num_params(self, dim_tuple: Tuple, symmetric: bool) -> int:
-        """Utility function to determine the number fo parameters from the input
+        """Utility function to determine the number of parameters from the input
         matrix dimensions.
 
         Args:
-            dim_tuple (Tuple): Tuple containing the size tupled for A and B
-            symmetric (bool): Whether the problem is assumed ot be symmetric
+            dim_tuple (Tuple): Tuple containing the size tuple for A and B
+            symmetric (bool): Whether the problem is assumed to be symmetric
 
         Returns:
             int: total number of parametsr in the problem
@@ -285,12 +285,8 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             ).reshape(numer.shape).T
 
             # Set the time-t element of the resulting xi matrix
-            # TODO -- fix this warning so that we never actually set anything to NaN
-            xi[:, :, t - 1] = numer / denom
-            # In cases where the denominator goes to zero, the neumerator is
-            # also zero and we can just define those as zero elements
-            if np.isnan(xi[:, :, t-1]).any():
-                xi[:, :, t-1] = np.nan_to_num(xi[:, :, t-1], nan=0.0)
+            xi_step = np.divide(numer, denom, where=(denom != 0))
+            xi[:, :, t - 1] = np.nan_to_num(xi_step, nan=0.0)
 
         # Return the sum over all points in time
         return xi.sum(axis=2)
@@ -497,7 +493,7 @@ if __name__ == "__main__":
     import warnings
 
     # replicating test
-    n_iterations = 100
+    n_iterations = 1000
 
     # Force warnings to be raised as errors
     warnings.simplefilter("error", category=RuntimeWarning)
@@ -516,14 +512,13 @@ if __name__ == "__main__":
         [0.01, 0.2, 0.3]
     ])
 
-
     opt2 = optimization.EMOptimizer()
     opt3 = optimization.EMOptimizer()
 
     for i in range(n_iterations):
         hmm = hp.dynamics.HMM(2, 2)
         hmm3 = hp.dynamics.HMM(3, 3)
-        
+
         hmm.init_uniform_cycle()
         hmm3.init_uniform_cycle()
 
@@ -531,9 +526,12 @@ if __name__ == "__main__":
         hmm3.run_dynamics(10)
 
         obs_ts = np.array(hmm.get_obs_ts())
-        obs_ts_3 = np.array(hmm3.get_obs_ts())
+        obs_ts_3 = np.abs(np.array(hmm3.get_obs_ts()) - 1)
 
-        A_new_2, B_new_2 = opt2.baum_welch_step(A_test_2, B_test_2, obs_ts)
-        A_new_3, B_new_3 = opt3.baum_welch_step(A_test_3, B_test_3, obs_ts)
+        res2 = opt2.optimize(obs_ts, A_test_2, B_test_2)
+        res3 = opt3.optimize(obs_ts_3, A_test_3, B_test_3)
+
+        # A_new_2, B_new_2 = opt2.baum_welch_step(A_test_2, B_test_2, obs_ts)
+        # A_new_3, B_new_3 = opt3.baum_welch_step(A_test_3, B_test_3, obs_ts)
 
     print("--DONE--")
