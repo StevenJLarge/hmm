@@ -104,12 +104,12 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
         return f"GlobalLikelihoodOptimizer(sampling_algorithm={self.algo})"
 
     def _get_num_params(self, dim_tuple: Tuple, symmetric: bool) -> int:
-        """Utility function to determine the number fo parameters from the input
+        """Utility function to determine the number of parameters from the input
         matrix dimensions.
 
         Args:
-            dim_tuple (Tuple): Tuple containing the size tupled for A and B
-            symmetric (bool): Whether the problem is assumed ot be symmetric
+            dim_tuple (Tuple): Tuple containing the size tuple for A and B
+            symmetric (bool): Whether the problem is assumed to be symmetric
 
         Returns:
             int: total number of parametsr in the problem
@@ -285,12 +285,8 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             ).reshape(numer.shape).T
 
             # Set the time-t element of the resulting xi matrix
-            # TODO -- fix this warning so that we never actually set anything to NaN
-            xi[:, :, t - 1] = numer / denom
-            # In cases where the denominator goes to zero, the neumerator is
-            # also zero and we can just define those as zero elements
-            if np.isnan(xi[:, :, t-1]).any():
-                xi[:, :, t-1] = np.nan_to_num(xi[:, :, t-1], nan=0.0)
+            xi_step = np.divide(numer, denom, where=(denom != 0))
+            xi[:, :, t - 1] = np.nan_to_num(xi_step, nan=0.0)
 
         # Return the sum over all points in time
         return xi.sum(axis=2)
@@ -497,10 +493,53 @@ if __name__ == "__main__":
     import warnings
 
     # replicating test
-    n_iterations = 100
+    n_iterations = 1000
 
     # Force warnings to be raised as errors
     warnings.simplefilter("error", category=RuntimeWarning)
+
+    from pathlib import Path
+    import pandas as pd
+    import pickle
+    read_dir = "C:/Users/SLarge/OneDrive - Viewpoint Capital Corporation/Documents/Code/hidden_trend/results/thesis"
+    filename = Path(read_dir) / "threshold_res.pkl"
+
+    class ThresholdDatasetResult:
+        def __init__(self, res_dict: dict):
+            self._results = res_dict
+
+        def result_set(self, delta_t: int, n_sigma: str, method: str):
+            return (
+                self._results[n_sigma][str(delta_t)]
+                .loc[:, pd.IndexSlice[:, method]]
+                .droplevel(axis=1, level=1)
+            )
+
+    with open(filename, 'rb') as f:
+        res = pickle.load(f)
+
+    ds1 = res._results['0.5']['10'].loc[:, pd.IndexSlice["australia_equity", 'fixed_time']]
+    ds1 = ds1.dropna()
+
+    trans_init = np.array([
+        [0.80, 0.15, 0.05],
+        [0.15, 0.70, 0.15],
+        [0.05, 0.15, 0.80]
+    ])
+
+    obs_init = np.array([
+        [0.92, 0.05, 0.03],
+        [0.05, 0.90, 0.05],
+        [0.03, 0.05, 0.92]
+    ])
+
+    analyzer = hp.infer.MarkovInfer(3, 3)
+
+    for idx in range(15):
+        blk = ds1.iloc[idx * 126: (idx * 126) + 252] + 1
+        analyzer.optimize(blk.to_numpy().astype(int), trans_init, obs_init, opt_type=hp.OptClass.ExpMax)
+
+    
 
     A_test_2 = np.array([[0.7, 0.2], [0.3, 0.8]])
     B_test_2 = np.array([[0.9, 0.01], [0.1, 0.99]])
@@ -514,8 +553,7 @@ if __name__ == "__main__":
         [0.98, 0.1, 0.4],
         [0.01, 0.7, 0.3],
         [0.01, 0.2, 0.3]
-    ])
-
+    ])-
 
     opt2 = optimization.EMOptimizer()
     opt3 = optimization.EMOptimizer()
@@ -523,7 +561,7 @@ if __name__ == "__main__":
     for i in range(n_iterations):
         hmm = hp.dynamics.HMM(2, 2)
         hmm3 = hp.dynamics.HMM(3, 3)
-        
+
         hmm.init_uniform_cycle()
         hmm3.init_uniform_cycle()
 
@@ -531,9 +569,12 @@ if __name__ == "__main__":
         hmm3.run_dynamics(10)
 
         obs_ts = np.array(hmm.get_obs_ts())
-        obs_ts_3 = np.array(hmm3.get_obs_ts())
+        obs_ts_3 = np.abs(np.array(hmm3.get_obs_ts()) - 1)
 
-        A_new_2, B_new_2 = opt2.baum_welch_step(A_test_2, B_test_2, obs_ts)
-        A_new_3, B_new_3 = opt3.baum_welch_step(A_test_3, B_test_3, obs_ts)
+        res2 = opt2.optimize(obs_ts, A_test_2, B_test_2)
+        res3 = opt3.optimize(obs_ts_3, A_test_3, B_test_3)
+
+        # A_new_2, B_new_2 = opt2.baum_welch_step(A_test_2, B_test_2, obs_ts)
+        # A_new_3, B_new_3 = opt3.baum_welch_step(A_test_3, B_test_3, obs_ts)
 
     print("--DONE--")
