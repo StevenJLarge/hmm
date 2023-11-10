@@ -498,49 +498,6 @@ if __name__ == "__main__":
     # Force warnings to be raised as errors
     warnings.simplefilter("error", category=RuntimeWarning)
 
-    from pathlib import Path
-    import pandas as pd
-    import pickle
-    read_dir = "C:/Users/SLarge/OneDrive - Viewpoint Capital Corporation/Documents/Code/hidden_trend/results/thesis"
-    filename = Path(read_dir) / "threshold_res.pkl"
-
-    class ThresholdDatasetResult:
-        def __init__(self, res_dict: dict):
-            self._results = res_dict
-
-        def result_set(self, delta_t: int, n_sigma: str, method: str):
-            return (
-                self._results[n_sigma][str(delta_t)]
-                .loc[:, pd.IndexSlice[:, method]]
-                .droplevel(axis=1, level=1)
-            )
-
-    with open(filename, 'rb') as f:
-        res = pickle.load(f)
-
-    ds1 = res._results['0.5']['10'].loc[:, pd.IndexSlice["australia_equity", 'fixed_time']]
-    ds1 = ds1.dropna()
-
-    trans_init = np.array([
-        [0.80, 0.15, 0.05],
-        [0.15, 0.70, 0.15],
-        [0.05, 0.15, 0.80]
-    ])
-
-    obs_init = np.array([
-        [0.92, 0.05, 0.03],
-        [0.05, 0.90, 0.05],
-        [0.03, 0.05, 0.92]
-    ])
-
-    analyzer = hp.infer.MarkovInfer(3, 3)
-
-    for idx in range(15):
-        blk = ds1.iloc[idx * 126: (idx * 126) + 252] + 1
-        analyzer.optimize(blk.to_numpy().astype(int), trans_init, obs_init, opt_type=hp.OptClass.ExpMax)
-
-    
-
     A_test_2 = np.array([[0.7, 0.2], [0.3, 0.8]])
     B_test_2 = np.array([[0.9, 0.01], [0.1, 0.99]])
 
@@ -553,7 +510,7 @@ if __name__ == "__main__":
         [0.98, 0.1, 0.4],
         [0.01, 0.7, 0.3],
         [0.01, 0.2, 0.3]
-    ])-
+    ])
 
     opt2 = optimization.EMOptimizer()
     opt3 = optimization.EMOptimizer()
