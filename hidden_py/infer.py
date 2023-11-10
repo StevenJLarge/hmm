@@ -9,9 +9,7 @@ from hidden_py.optimize.registry import OPTIMIZER_REGISTRY
 from hidden_py.optimize.base import OptClass
 from hidden_py.optimize.results import OptimizationResult
 from hidden_py.filters import bayesian
-
-# Configure logger
-logger.add(sys.stdout, colorize=True, format="<green>{time}</green> <level>{message}</level>")
+from hidden_py.log_setup import log_fmt
 
 
 class MarkovInfer:
@@ -39,6 +37,9 @@ class MarkovInfer:
 
         # Flag for if logging output is desired
         self.logging = logging
+        if logging:
+            logger.remove()
+            logger.add(sys.stdout, colorize=True, format=log_fmt)
 
     @staticmethod
     def _validate_input(obs_ts: Iterable) -> np.ndarray:
@@ -205,7 +206,6 @@ class MarkovInfer:
         self, observations: Iterable, trans_init: np.ndarray,
         obs_init: np.ndarray, symmetric: bool = False,
         opt_type: OptClass = OptClass.Local, algo_opts: Dict = {},
-        verbose: bool = False
     ) -> OptimizationResult:
         """Main entrypoint for optimizing an internal model
 
@@ -262,7 +262,10 @@ if __name__ == "__main__":
     from pathlib import Path
     import pickle
 
-    analyzer = MarkovInfer(3, 3)
+    analyzer = MarkovInfer(3, 3, logging=True)
+
+    # logger.info('Testing logs')
+    # logger.debug('Testing logs debug')
 
     A3_init = np.array([
         [0.70, 0.2,0.75],
