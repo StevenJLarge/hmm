@@ -7,7 +7,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 setup(
     name='hidden-py',
     packages=find_packages(),
-    version="1.0.17",
+    version="1.0.18",
     long_description=long_description,
     long_description_content_type='text/markdown',
     description='''
@@ -22,7 +22,8 @@ setup(
         'scipy',
         'matplotlib',
         'seaborn >= 0.11.1',
-        'numba'
+        'numba',
+        'loguru'
     ],
     project_urls={
         'Source': 'https://github.com/StevenJLarge/hmm'

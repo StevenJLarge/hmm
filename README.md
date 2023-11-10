@@ -37,6 +37,7 @@ Without any ambiguity in the observed value (_i.e._ the underlying Markov model 
     <img src="https://github.com/StevenJLarge/hmm/blob/master/public/resources/markov_schematic.png?raw=true" width="75%" vspace="30px"/>
 </p>
 
+
 Here, the state $x_t$ at time $t$ only depends on the state at the previous time $t-1$. As a result the ecolution of a probability distribution over states can be modelled by simply multiplying an initial distribution by the transition matrix, and repeating the process for each time step. For example, given an initial distribution over states at time 0 and a transition matrix $A$, the probability distribution at time $T$ is
 
 $$ p_T = A^T \cdot p_0 $$

@@ -1,27 +1,20 @@
 # File to contain the class definitions and routines for inferring the
 # properties of the HMM
 from typing import Iterable, Optional, Dict
+import sys
+from loguru import logger
 import numpy as np
 from pandas import DataFrame, Series
 from hidden_py.optimize.registry import OPTIMIZER_REGISTRY
 from hidden_py.optimize.base import OptClass
 from hidden_py.optimize.results import OptimizationResult
 from hidden_py.filters import bayesian
+from hidden_py.log_setup import log_fmt
 
 
 class MarkovInfer:
-    # Type hints for instance variables
-    forward_tracker: Iterable
-    backward_tracker: Iterable
-    predictions: Iterable
-    predictions_back: Iterable
-    bayes_smooth: Iterable
-    alpha_tracker: Iterable
-    beta_tracker: Iterable
-    n_sys: int
-    n_obs: int
- 
-    def __init__(self, dim_sys: int, dim_obs: int) -> None:
+
+    def __init__(self, dim_sys: int, dim_obs: int, logging: bool = False) -> None:
         """Constructor for MarkovInfer class, this generally acts as an
         interface/wrapper for the optimization and filtering routines
 
@@ -41,6 +34,12 @@ class MarkovInfer:
         # Dimension of target system and observation vector
         self.n_sys = dim_sys
         self.n_obs = dim_obs
+
+        # Flag for if logging output is desired
+        self.logging = logging
+        if logging:
+            logger.remove()
+            logger.add(sys.stdout, colorize=True, format=log_fmt)
 
     @staticmethod
     def _validate_input(obs_ts: Iterable) -> np.ndarray:
@@ -205,9 +204,8 @@ class MarkovInfer:
 
     def optimize(
         self, observations: Iterable, trans_init: np.ndarray,
-        obs_init: np.ndarray, symmetric: Optional[bool] = False,
-        opt_type: Optional[OptClass] = OptClass.Local,
-        algo_opts: Optional[Dict] = {}
+        obs_init: np.ndarray, symmetric: bool = False,
+        opt_type: OptClass = OptClass.Local, algo_opts: Dict = {},
     ) -> OptimizationResult:
         """Main entrypoint for optimizing an internal model
 
@@ -231,25 +229,30 @@ class MarkovInfer:
         Returns:
             OptimizationResult: Result of optimization
         """
+        if self.logging:
+            logger.info('Entering optimization...')
+
         if not isinstance(opt_type, OptClass):
             raise ValueError(
                 'Invalid `opt_class`, must be a member of OptClass enum...'
             )
         observations = self._validate_input(observations)
         # For the global optimizer, dim_tuple, but no initial guesses
-        # TODO -- Add verbose option to suppress output
         optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
         if (opt_type is OptClass.Global):
-            print("Running global partial-data likelihood optimization...")
+            if self.logging:
+                logger.info('Running global optimization')
             dim_tuple = (trans_init.shape, obs_init.shape)
             return optimizer.optimize(observations, dim_tuple, symmetric)
 
         # For EM opt, there is no option to input a symmetric constraint
         elif (opt_type is OptClass.ExpMax):
-            print("Running Baum-Welch (EM) optimization...")
+            if self.logging:
+                logger.info("Running Baum-Welch (EM) optimization...")
             return optimizer.optimize(observations, trans_init, obs_init)
 
-        print("Running local partial-data likelihood optimization...")
+        if self.logging:
+            logger.info("Running local partial-data likelihood optimization...")
         return optimizer.optimize(observations, trans_init, obs_init, symmetric)
 
 
@@ -259,7 +262,10 @@ if __name__ == "__main__":
     from pathlib import Path
     import pickle
 
-    analyzer = MarkovInfer(3, 3)
+    analyzer = MarkovInfer(3, 3, logging=True)
+
+    # logger.info('Testing logs')
+    # logger.debug('Testing logs debug')
 
     A3_init = np.array([
         [0.70, 0.2,0.75],
@@ -273,31 +279,5 @@ if __name__ == "__main__":
         [0.10,0.10,0.70]
     ])
 
-    proj_dir = Path(__file__).parents[1]
-    read_dir = proj_dir / "data" / "triple_barrier_dt_21_nsig_0.5"
-    with open(read_dir / "triple_barrier.pkl", "rb") as f:
-        res = pickle.load(f)
-
-    data_ind = res._agg_results['dev_equity']._results["fixed_time"]['canada_equity'].indicator.dropna().to_numpy() + 1
-
-    res_ca_eq = {}
-    WIN_SIZE = 252
-
-    for i, idx in enumerate(range(0, len(data_ind[:-WIN_SIZE]), 63)):
-        print(f"idx = {idx}")
-        if i % 10 == 0:
-            print(f"Working on idx {i} (of {len(data_ind[:-WIN_SIZE:63])})")
-        _res = analyzer.optimize(data_ind[idx: idx + WIN_SIZE], A3_init, B3_init, opt_type=hp.OptClass.ExpMax)
-        res_ca_eq[str(idx)] = _res
-
-    # opt_res = analyzer.optimize(data_ind[:252], A3_init, B3_init, opt_type=OptClass.ExpMax)
-
-    # read_dir = Path(__file__).parents[1] / "data"
-    # df_spx = pd.read_csv(read_dir / "df_spx.csv", index_col=0)
-
-    # res = analyzer.optimize(
-    #     df_spx.loc[:252].to_numpy() + 1, A3_init, B3_init,
-    #     opt_type=hp.OptClass.ExpMax
-    # )
 
     print("--DONE--")
