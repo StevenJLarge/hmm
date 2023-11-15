@@ -236,7 +236,7 @@ if __name__ == "__main__":
     hmm.init_uniform_cycle()
 
     hmm.run_dynamics(5)
-    obs_ts, state_ts = hmm.get_obs_ts(), hmm.get_state_ts()
+    obs_ts, state_ts = hmm.obs_ts, hmm.state_ts
 
     A_perturb = np.array([
         [-0.05, 0.04],

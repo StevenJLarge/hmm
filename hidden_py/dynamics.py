@@ -122,10 +122,12 @@ class HMM:
         self.obs = np.zeros(self.n_obs)
         self.obs[new_obs] = 1
 
-    def get_state_ts(self):
+    @property
+    def state_ts(self):
         return [np.argmax(s) for s in self.state_tracker]
-
-    def get_obs_ts(self):
+    
+    @property
+    def obs_ts(self):
         return [np.argmax(o) for o in self.obs_tracker]
 
     @property
@@ -170,8 +172,8 @@ if __name__ == "__main__":
 
     # Generate synthetic dynamics:
     obj.run_dynamics(n_steps=25)
-    state = obj.get_state_ts()
-    obs = obj.get_obs_ts()
+    state = obj.state_ts
+    obs = obj.obs_ts
 
     plot_traj(state, obs)
 

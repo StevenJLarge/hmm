@@ -189,7 +189,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         track_optimization: Union[bool, int] = False,
         tracking_interval: int = 100,
         tracking_norm: str = 'fro',
-        laplace_factor: float=1e-10,
+        laplace_factor: float = 1e-10,
         **kwargs
     ) -> None:
         """Constructor for Expectation-Maximization optimizer

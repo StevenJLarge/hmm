@@ -87,7 +87,7 @@ def test_forward_algorithm_tracking(test_hmm):
 
     # Act
     test_hmm.run_dynamics(10)
-    obs_ts = test_hmm.get_obs_ts()
+    obs_ts = test_hmm.obs_ts
     BayesInfer.forward_algo(obs_ts, test_hmm.A, test_hmm.B)
 
     # Assert
@@ -102,7 +102,7 @@ def test_backward_algorithm_tracking(test_hmm):
 
     # Act
     test_hmm.run_dynamics(10)
-    obs_ts = test_hmm.get_obs_ts()
+    obs_ts = test_hmm.obs_ts
     BayesInfer.backward_algo(obs_ts, test_hmm.A, test_hmm.B)
 
     # Assert
@@ -117,7 +117,7 @@ def test_smoothing_algorithm_tracking(test_hmm):
 
     # Act
     test_hmm.run_dynamics(n_steps)
-    obs_ts = test_hmm.get_obs_ts()
+    obs_ts = test_hmm.obs_ts
     BayesInfer.bayesian_smooth(obs_ts, test_hmm.A, test_hmm.B)
 
     # Assert
@@ -131,7 +131,7 @@ def test_alpha_algorithm_tracking(test_hmm):
 
     # Act
     test_hmm.run_dynamics(n_steps)
-    obs_ts = test_hmm.get_obs_ts()
+    obs_ts = test_hmm.obs_ts
     BayesInfer.alpha(obs_ts, test_hmm.A, test_hmm.B)
 
     # Assert
@@ -145,7 +145,7 @@ def test_beta_algorithm_tracking(test_hmm):
 
     # Act
     test_hmm.run_dynamics(n_steps)
-    obs_ts = test_hmm.get_obs_ts()
+    obs_ts = test_hmm.obs_ts
     BayesInfer.beta(obs_ts, test_hmm.A, test_hmm.B)
 
     # Assert
@@ -228,7 +228,7 @@ def check_optimizer_runs_with_correct_return_type_for_valid_input(test_hmm, sym,
 
     # Act
     test_hmm.run_dynamics(n_steps)
-    obs_ts = test_hmm.get_obs_ts()
+    obs_ts = test_hmm.obs_ts
     opt_res = BayesInfer.optimize(
         obs_ts, test_hmm.A, test_hmm.B, symmetric=sym, opt_type=opt_type
     )
