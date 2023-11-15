@@ -471,12 +471,13 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
                 obs_mat_tracker.append(obs_matrix)
             iter_count += 1
 
-        meta_dict = {}
+        meta_dict = {
+            'max_iter': self._max_iter,
+            'conv_threshold': self._opt_threshold
+        }
         if self._track:
-            meta_dict = {
-                "trans_tracker": trans_mat_tracker,
-                "obs_tracker": obs_mat_tracker
-            }
+            meta_dict["trans_tracker"]: trans_mat_tracker
+            meta_dict["obs_tracker"]: obs_mat_tracker
 
         return EMOptimizationResult(
             trans_matrix, obs_matrix, update_tracker, iter_count,
