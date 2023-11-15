@@ -196,7 +196,7 @@ def test_xi_matrix_shape(A_matrix, B_matrix, iteration):
     hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
     hmm.init_uniform_cycle()
     hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
+    obs_ts = np.array(hmm.obs_ts)
     opt = optimization.EMOptimizer()
 
     # Act
@@ -221,7 +221,7 @@ def test_bw_update_preserves_A_matrix_normalization(A_matrix, B_matrix, iteratio
     hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
     hmm.init_uniform_cycle()
     hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
+    obs_ts = np.array(hmm.obs_ts)
     opt = optimization.EMOptimizer()
 
     # Act
@@ -242,7 +242,7 @@ def test_bw_update_preserves_B_matrix_normalization(A_matrix, B_matrix, iteratio
     hmm = HMM(A_matrix.shape[0], B_matrix.shape[0])
     hmm.init_uniform_cycle()
     hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
+    obs_ts = np.array(hmm.obs_ts)
     opt = optimization.EMOptimizer()
 
     # Act

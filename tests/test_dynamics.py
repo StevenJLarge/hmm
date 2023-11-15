@@ -146,8 +146,8 @@ def test_dynamics_default_behaviour():
 
     # Act
     hmm.run_dynamics(n_steps, init_state=0)
-    state_ts = hmm.get_state_ts()
-    obs_ts = hmm.get_obs_ts()
+    state_ts = hmm.state_ts
+    obs_ts = hmm.obs_ts
 
     emp_dist = np.sum(state_ts) / n_steps
     emp_obs = np.sum(obs_ts) / n_steps

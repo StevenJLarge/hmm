@@ -144,7 +144,7 @@ def test_return_from_estimate_is_correct_shape_2d(filter_func, N):
  
     # Act
     test_hmm.run_dynamics(n_steps)
-    obs_ts = np.array(test_hmm.get_obs_ts())
+    obs_ts = np.array(test_hmm.obs_ts)
     res = filter_func(obs_ts, test_hmm.A, test_hmm.B)
 
     if isinstance(res, tuple):
@@ -167,7 +167,7 @@ def test_forward_algo_stays_normalized(N):
 
     # Act
     test_model.run_dynamics(n_steps)
-    obs = test_model.get_obs_ts()
+    obs = test_model.obs_ts
     fwd_tracker, _ = bayesian.forward_algo(obs, test_model.A, test_model.B)
 
     # Assert
@@ -184,7 +184,7 @@ def test_backward_algo_stays_normalized(N):
 
     # Act
     test_model.run_dynamics(n_steps)
-    obs = test_model.get_obs_ts()
+    obs = test_model.obs_ts
     back_tracker, _ = bayesian.backward_algo(np.array(obs), test_model.A, test_model.B)
 
     # Assert
@@ -201,7 +201,7 @@ def test_bayesian_algo_stays_normalized(N, exec_num):
 
     # Act
     test_model.run_dynamics(n_steps)
-    obs = test_model.get_obs_ts()
+    obs = test_model.obs_ts
     bayes_tracker = bayesian.bayes_estimate(np.array(obs), test_model.A, test_model.B)
 
     # Assert
@@ -331,7 +331,7 @@ def test_forward_filter_normalization(A_matrix, B_matrix, iteration):
     hmm = dynamics.HMM(A_matrix.shape[0], B_matrix.shape[0])
     hmm.init_uniform_cycle()
     hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
+    obs_ts = np.array(hmm.obs_ts)
 
     # Act, second arg is prediction tracker
     fwd_tracker, _ = bayesian.forward_algo(obs_ts, A_matrix, B_matrix)
@@ -350,7 +350,7 @@ def test_backward_filter_normalization(A_matrix, B_matrix, iteration):
     hmm = dynamics.HMM(A_matrix.shape[0], B_matrix.shape[0])
     hmm.init_uniform_cycle()
     hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
+    obs_ts = np.array(hmm.obs_ts)
 
     # Act
     back_tracker, _ = bayesian.backward_algo(obs_ts, A_matrix, B_matrix)
@@ -368,7 +368,7 @@ def test_bayes_filter_normalization(A_matrix, B_matrix, iteration):
     hmm = dynamics.HMM(*A_matrix.shape)
     hmm.init_uniform_cycle()
     hmm.run_dynamics(n_steps)
-    obs_ts = np.array(hmm.get_obs_ts())
+    obs_ts = np.array(hmm.obs_ts)
 
     # Act
     bayes_tracker = bayesian.bayes_estimate(obs_ts, A_matrix, B_matrix)
