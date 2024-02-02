@@ -236,7 +236,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         )
 
     @staticmethod
-    # @numba.jit(nopython=True)
+    @numba.jit(nopython=True)
     def xi_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray
@@ -285,8 +285,11 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             ).reshape(numer.shape).T
 
             # Set the time-t element of the resulting xi matrix
-            xi_step = np.divide(numer, denom, where=(denom != 0))
-            xi[:, :, t - 1] = np.nan_to_num(xi_step, nan=0.0)
+            xi_step = np.divide(numer, denom)
+            xi_step = np.where(denom == 0, 0, xi_step)
+            xi_step = np.where(np.isnan(xi_step), 0, xi_step)
+
+            xi[:, :, t - 1] = xi_step
 
         # Return the sum over all points in time
         return xi.sum(axis=2)

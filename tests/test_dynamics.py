@@ -8,16 +8,18 @@ dimension_tests = [(2, 2), (1, 2), (2, 1), (2, 4), (3, 1)]
 A_ident = np.eye(2)
 B_ident = np.eye(2)
 
-uni_cycle_2d = lambda x: np.array([
-    [1 - x, x],
-    [x, 1 - x]
-])
+def uni_cycle_2d(x):
+    return np.array([
+        [1 - x, x],
+        [x, 1 - x]
+    ])
 
-uni_cycle_3d = lambda x: np.array([
-    [1 - 2 * x, x, x],
-    [x, 1 - 2 * x, x],
-    [x, x, 1 - 2 * x]
-])
+def uni_cycle_3d(x):
+    return np.array([
+        [1 - 2 * x, x, x],
+        [x, 1 - 2 * x, x],
+        [x, x, 1 - 2 * x]
+    ])
 
 
 @pytest.mark.parametrize('dimensions', dimension_tests)
@@ -51,6 +53,16 @@ def test_set_state_behaviour(state_value):
 
 @pytest.mark.parametrize('obs_value', [0, 1])
 def test_set_obs_behaviour(obs_value):
+    """
+    Test the behavior of the _set_obs method in the HMM class.
+
+    Parameters:
+    obs_value (int): The value of the observation to be set.
+
+    Returns:
+    None
+    """
+    
     # Arrange
     hmm = dynamics.HMM(2, 2)
 
@@ -63,8 +75,18 @@ def test_set_obs_behaviour(obs_value):
     # Assert
     assert (obs == desired_obs).all()
 
+
 @pytest.mark.parametrize('invalid_state', [3, -1])
 def test_invalid_state_assignment_raises(invalid_state):
+    """
+    Test that assigning an invalid state raises an IndexError.
+
+    Args:
+        invalid_state: The invalid state to be assigned.
+
+    Raises:
+        IndexError: If the state assignment is invalid.
+    """
     # Arrange
     hmm = dynamics.HMM(2, 2)
 
@@ -75,6 +97,16 @@ def test_invalid_state_assignment_raises(invalid_state):
 
 @pytest.mark.parametrize('invalid_obs', [3, -1])
 def test_invalid_obs_assignment_raises(invalid_obs):
+    """
+    Test that assigning invalid observations raises an IndexError.
+
+    Args:
+        invalid_obs: Invalid observations to be assigned.
+
+    Raises:
+        IndexError: If the observations are invalid.
+
+    """
     # Arrange
     hmm = dynamics.HMM(2, 2)
 
@@ -86,6 +118,17 @@ def test_invalid_obs_assignment_raises(invalid_obs):
 @pytest.mark.parametrize('dim', [2, 3])
 @pytest.mark.parametrize('trans_rate', [0.1, 0.2, 0.3])
 def test_uniform_cycle_initialization(dim, trans_rate):
+    """
+    Test the initialization of an HMM with a uniform cycle transition matrix.
+
+    Args:
+        dim (int): The dimension of the HMM.
+        trans_rate (float): The transition rate for the uniform cycle.
+
+    Returns:
+        None
+    """
+
     # Arrange
     hmm = dynamics.HMM(dim, dim)
 
@@ -103,6 +146,10 @@ def test_uniform_cycle_initialization(dim, trans_rate):
 
 
 def test_invalid_cycle_initialization_raises():
+    """
+    Test case to verify that initializing the cycle probabilities with invalid
+    values raises NotImplementedError.
+    """
     # Arrange
     hmm = dynamics.HMM(2, 3)
 
@@ -112,6 +159,10 @@ def test_invalid_cycle_initialization_raises():
 
 
 def test_invalid_transiton_matrix_raises():
+    """
+    Test that an invalid transition matrix raises a ValueError.
+    """
+
     # Arrange
     hmm = dynamics.HMM(2, 2)
     hmm.init_uniform_cycle()
@@ -125,6 +176,10 @@ def test_invalid_transiton_matrix_raises():
 
 
 def test_invalid_observation_matrix_raises():
+    """
+    Test that an invalid observation matrix raises a ValueError.
+    """
+
     # Arrange
     hmm = dynamics.HMM(2, 2)
     hmm.init_uniform_cycle()
@@ -138,6 +193,16 @@ def test_invalid_observation_matrix_raises():
 
 
 def test_dynamics_default_behaviour():
+    """
+    Test the default behavior of the dynamics module in the HMM class.
+
+    This test function sets up an HMM object with 2 hidden states and 2 observable states.
+    It then runs the dynamics for a specified number of steps and checks the behavior of the HMM.
+
+    Returns:
+        None
+    """
+
     # Arrange
     hmm = dynamics.HMM(2, 2)
     hmm.A = 0.5 * np.ones((2, 2))
