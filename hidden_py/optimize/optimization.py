@@ -236,7 +236,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         )
 
     @staticmethod
-    # @numba.jit(nopython=True)
+    @numba.jit(nopython=True)
     def xi_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha_norm: np.ndarray, beta_norm: np.ndarray, bayes: np.ndarray

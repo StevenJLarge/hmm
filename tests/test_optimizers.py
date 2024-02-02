@@ -1,4 +1,5 @@
 # Testing suite for inferrence routines
+import os
 import operator
 import pytest
 import numpy as np
@@ -8,6 +9,7 @@ from hidden_py.filters import bayesian
 
 TEST_ITERATIONS = 10
 
+# test transition and observation matrices
 A_test_2 = np.array([[0.7, 0.2], [0.3, 0.8]])
 A_test_2_sym = np.array([[0.7, 0.3], [0.3, 0.7]])
 
@@ -38,31 +40,49 @@ B_test_3_sym = np.array([
     [0.2, 0.3, 0.5]
 ])
 
+# test data - 2-dimensional encoding
 test_2_enc = np.array([0.3, 0.2, 0.1, 0.01])
 test_2_enc_sym = np.array([0.3, 0.1])
 
+# test data - 3-dimensional encoding
 test_3_enc = np.array(
     [0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.01, 0.01, 0.1, 0.2, 0.4, 0.3]
 )
 test_3_enc_sym = np.array([0.1, 0.2, 0.2, 0.1, 0.2, 0.3])
 
+# test data
 test_data = [[A_test_2, B_test_2], [A_test_3, B_test_3]]
 test_data_sym = [[A_test_2_sym, B_test_2_sym], [A_test_3_sym, B_test_3_sym]]
 
+# compressed test data
 test_data_comp = [
     [A_test_2, B_test_2, test_2_enc],
     [A_test_3, B_test_3, test_3_enc]
 ]
 
+# symmetric test data
 test_data_comp_sym = [
     [A_test_2_sym, B_test_2_sym, test_2_enc_sym],
     [A_test_3_sym, B_test_3_sym, test_3_enc_sym]
 ]
 
 
+@pytest.fixture
+def enable_numba():
+    '''Fixture to enable numba'''
+    # enable numba
+    os.environ["NUMBA_DISABLE_JIT"] = "0"
+
+    yield
+
+    # disable numba
+    os.environ["NUMBA_DISABLE_JIT"] = "1"
+
+
 # IO tests
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_encoding_dimensions(A_matrix, B_matrix):
+    '''Test that the encoding has the correct dimensions'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -76,6 +96,7 @@ def test_encoding_dimensions(A_matrix, B_matrix):
 
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_encoded_length(A_matrix, B_matrix):
+    '''Test that the encoding has the correct length'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -95,6 +116,7 @@ def test_encoded_length(A_matrix, B_matrix):
 
 @pytest.mark.parametrize(['A_matrix', "B_matrix"], test_data_sym)
 def test_encoded_length_symmetric(A_matrix, B_matrix):
+    '''Test that the symmetric encoding has the correct length'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -112,6 +134,7 @@ def test_encoded_length_symmetric(A_matrix, B_matrix):
 
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data_sym)
 def test_non_square_matrix_in_symmetric_encoding_raises(A_matrix, B_matrix):
+    '''Test that a non-square matrix raises an error in symmetric encoding'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -123,6 +146,7 @@ def test_non_square_matrix_in_symmetric_encoding_raises(A_matrix, B_matrix):
 
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_non_symmetric_matrix_in_symmtric_encoding_raises(A_matrix, B_matrix):
+    '''Test that a non-symmetric matrix raises an error in symmetric encoding'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -134,6 +158,7 @@ def test_non_symmetric_matrix_in_symmtric_encoding_raises(A_matrix, B_matrix):
 # test matrix encoding and parameter extraction
 @pytest.mark.parametrize(['A_matrix', 'B_matrix', 'compressed'], test_data_comp)
 def test_matrix_encoding(A_matrix, B_matrix, compressed):
+    '''Test that the encoding of the parameters is correct'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -148,6 +173,7 @@ def test_matrix_encoding(A_matrix, B_matrix, compressed):
 
 @pytest.mark.parametrize(["A_matrix", "B_matrix", "compressed"], test_data_comp_sym)
 def test_matrix_encoding_symmetric(A_matrix, B_matrix, compressed):
+    '''Test that the symmetric encoding of the parameters is correct'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -163,6 +189,7 @@ def test_matrix_encoding_symmetric(A_matrix, B_matrix, compressed):
 # Test matrix decoding as well
 @pytest.mark.parametrize(['A_matrix', 'B_matrix', 'compressed'], test_data_comp)
 def test_matrix_decoding(A_matrix, B_matrix, compressed):
+    '''Test that the decoding of the compressed parameters is correct'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -176,6 +203,7 @@ def test_matrix_decoding(A_matrix, B_matrix, compressed):
 
 @pytest.mark.parametrize(['A_matrix', 'B_matrix', 'compressed'], test_data_comp_sym)
 def test_matrix_decoding_symmetric(A_matrix, B_matrix, compressed):
+    '''Test that the symmetric decoding of the compressed parameters is correct'''
     # Arrange
     opt = base.TestLikelihoodOptimizer()
 
@@ -190,6 +218,7 @@ def test_matrix_decoding_symmetric(A_matrix, B_matrix, compressed):
 @pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_xi_matrix_shape(A_matrix, B_matrix, iteration):
+    '''Test that the xi matrix has the correct shape'''
     # Arrange
     _ = iteration
     n_steps = 100
@@ -215,6 +244,7 @@ def test_xi_matrix_shape(A_matrix, B_matrix, iteration):
 @pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_bw_update_preserves_A_matrix_normalization(A_matrix, B_matrix, iteration):
+    '''Test that the Baum-Welch update preserves the normalization of the A matrix'''
     # Arrange
     _ = iteration
     n_steps = 10
@@ -236,6 +266,7 @@ def test_bw_update_preserves_A_matrix_normalization(A_matrix, B_matrix, iteratio
 @pytest.mark.parametrize('iteration', range(TEST_ITERATIONS))
 @pytest.mark.parametrize(['A_matrix', 'B_matrix'], test_data)
 def test_bw_update_preserves_B_matrix_normalization(A_matrix, B_matrix, iteration):
+    '''Test that the Baum-Welch update preserves the normalization of the B matrix'''
     # Arrange
     _ = iteration
     n_steps = 10
@@ -252,6 +283,56 @@ def test_bw_update_preserves_B_matrix_normalization(A_matrix, B_matrix, iteratio
     # Assert
     assert all(np.isclose(B_new.sum(axis=0), np.ones(B_new.shape[1])))
     assert all(np.isclose(B_new_2.sum(axis=0), np.ones(B_new_2.shape[1])))
+
+
+def test_calculate_xi():
+    '''Test the calculation of the xi matrix'''
+    # Define inputs
+    trans_matrix = np.array([[0.5, 0.5], [0.5, 0.5]])
+    obs_ts = np.array([0, 1, 0, 1], dtype=int)
+    obs_matrix = np.array([[0.6, 0.4], [0.4, 0.6]])
+    beta_norm = np.array([[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]])
+    alpha_norm = np.array([[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]])
+    bayes = np.array([[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]])
+
+    # Call the function with the inputs
+    result = optimization.EMOptimizer.xi_matrix(
+        obs_ts, trans_matrix, obs_matrix, alpha_norm, beta_norm, bayes
+    )
+
+    # Define what you expect the output to be
+    expected_result = np.array([[0.7, 0.7], [0.8, 0.8]])
+
+    # Assert that the output matches the expected result
+    np.testing.assert_array_almost_equal(result, expected_result)
+
+
+def test_numbafied_optimization_local_likelihood(enable_numba):
+    '''Test the numba-compiled local likelihood function'''
+    # Define inputs
+    obs_ts = np.array([0, 1, 0, 1], dtype=int)
+    A_matrix = np.array([[0.5, 0.5], [0.5, 0.5]])
+    B_matrix = np.array([[0.6, 0.4], [0.4, 0.6]])
+
+    # Call the function with the inputs
+    opt = optimization.LocalLikelihoodOptimizer()
+    _ = opt.optimize(obs_ts, A_matrix, B_matrix)
+
+    assert True
+
+
+def test_numbafied_optimization_em(enable_numba):
+    '''Test the numba-compiled local likelihood function'''
+    # Define inputs
+    obs_ts = np.array([0, 1, 0, 1], dtype=int)
+    A_matrix = np.array([[0.5, 0.5], [0.5, 0.5]])
+    B_matrix = np.array([[0.6, 0.4], [0.4, 0.6]])
+
+    # Call the function with the inputs
+    opt = optimization.EMOptimizer()
+    _ = opt.optimize(obs_ts, A_matrix, B_matrix)
+
+    assert True
 
 
 if __name__ == "__main__":
