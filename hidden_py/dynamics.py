@@ -67,8 +67,8 @@ class HMM:
                 "Currently, cycle default matrices can only be instantiated "
                 "when `n_sys` = `n_obs`"
             )
-        self.A = self.init_cycle_matrix(self.n_sys, trans_rate)
-        self.B = self.init_cycle_matrix(self.n_obs, error_rate)
+        self.A = self._init_cycle_matrix(self.n_sys, trans_rate)
+        self.B = self._init_cycle_matrix(self.n_obs, error_rate)
 
     def _init_cycle_matrix(self, size: int, rate: float) -> np.ndarray:
         """
