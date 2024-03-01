@@ -313,7 +313,6 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
         return obs_num
 
     @staticmethod
-    # @numba.jit(nopython=True)
     def _update_transition_matrix(
         obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
         alpha: np.ndarray, beta: np.ndarray, bayes: np.ndarray, laplace: float
@@ -489,13 +488,8 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
 
 if __name__ == "__main__":
-    import time
-    # import os
     import hidden_py as hp
     from hidden_py.optimize import optimization
-    # for warning handling
-    import warnings
-
     # replicating test
     n_iterations = 1000
 
