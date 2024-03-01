@@ -87,7 +87,6 @@ class BaseOptimizer(ABC):
 
 
 class LikelihoodOptimizer(BaseOptimizer):
-
     @staticmethod
     def _encode_parameters_symmetric(
         trans_mat: np.ndarray, obs_mat: np.ndarray

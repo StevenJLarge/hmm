@@ -162,7 +162,7 @@ class MarkovInfer:
     ) -> None:
         """Wrapper routine to interface with bayesian smoothing routine. Sets
         to internal bayes_smooth instance variable
-        
+
         Args:
             observations (np.ndarray): timeseries of observations
             trans_matrix (np.ndarray): transition matrix
@@ -172,6 +172,7 @@ class MarkovInfer:
         self.bayes_smooth = bayesian.bayes_estimate(
             observations, trans_matrix, obs_matrix
         )
+        return self.bayes_smooth
 
     def discord(self, est_1: Iterable, est_2: Iterable) -> float:
         """Calculates the discord order parameter for an HMM based on the
@@ -257,27 +258,21 @@ class MarkovInfer:
 
 
 if __name__ == "__main__":
-    import hidden_py as hp
-    import pandas as pd
-    from pathlib import Path
-    import pickle
-
     analyzer = MarkovInfer(3, 3, logging=True)
 
     # logger.info('Testing logs')
     # logger.debug('Testing logs debug')
 
     A3_init = np.array([
-        [0.70, 0.2,0.75],
-        [0.20, 0.7,0.15],
-        [0.10,0.1,0.1]
+        [0.70, 0.2, 0.75],
+        [0.20, 0.7, 0.15],
+        [0.10, 0.1, 0.1]
     ])
 
     B3_init = np.array([
-        [0.85, 0.10,0.10],
-        [0.05, 0.80,0.20],
-        [0.10,0.10,0.70]
+        [0.85, 0.10, 0.10],
+        [0.05, 0.80, 0.20],
+        [0.10, 0.10, 0.70]
     ])
-
 
     print("--DONE--")
