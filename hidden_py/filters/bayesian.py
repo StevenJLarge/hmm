@@ -40,6 +40,26 @@ def bayes_estimate(
     return bayes_smooth
 
 
+def limited_memory_bayes_estimate(
+    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+    memory_duration: int
+) -> np.ndarray:
+    
+    lm_fwd_tracker, lm_pred = limited_mem_forward_algo(
+        obs_ts, trans_matrix, obs_matrix, memory_duration
+    )
+
+    lmb_smooth = np.zeros((len(obs_ts), trans_matrix.shape[1]), dtype=float)
+    lmb_smooth[-1, :] = lm_fwd_tracker[-1, :]
+
+
+def limited_mem_forward_algo(
+    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+    memory_duration: int
+) -> Tuple[np.ndarray, np.ndarray]:
+    pass
+
+
 @numba.jit(nopython=True)
 def forward_algo(
     observations: Iterable, trans_matrix: np.ndarray, obs_matrix: np.ndarray
