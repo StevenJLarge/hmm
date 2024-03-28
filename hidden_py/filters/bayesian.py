@@ -1,10 +1,40 @@
 # Bayesian filters -- Fowrward, backward, bayesian
+from enum import Enum
 from typing import Iterable, Tuple, Optional
 import numpy as np
 import numba
 
 
-@numba.jit(nopython=True)
+class Prior(Enum):
+    Uniform = 'UNIFORM'
+    Random = 'RANDOM'
+    Naive = 'NAIVE'
+
+    def __new__(cls, member_value):
+        member = object.__new__(cls)
+        member._value_ = member_value
+
+        return member
+
+    def get(self,  n_states: int, init_state: Optional[int] = None):
+        if self.name == 'UNIFORM':
+            return np.ones(n_states) / n_states
+        elif self.name == 'NAIVE':
+            if init_state is None:
+                raise ValueError('Must provide initial state for naive prior')
+            prior = np.zeros(n_states)
+            prior[init_state] = 1
+            return prior
+        elif self.name == 'RANDOM':
+            prior = np.random.rand(n_states)
+            return prior / prior.sum()
+
+    @property
+    def name(self):
+        return self._value_
+
+
+# @numba.jit(nopython=True)
 def bayes_estimate(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray
 ) -> np.ndarray:
@@ -44,25 +74,68 @@ def limited_memory_bayes_estimate(
     obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
     memory_duration: int
 ) -> np.ndarray:
-    
+
     lm_fwd_tracker, lm_pred = limited_mem_forward_algo(
         obs_ts, trans_matrix, obs_matrix, memory_duration
     )
 
-    lmb_smooth = np.zeros((len(obs_ts), trans_matrix.shape[1]), dtype=float)
-    lmb_smooth[-1, :] = lm_fwd_tracker[-1, :]
+    bayes_smooth = np.zeros((len(obs_ts), trans_matrix.shape[1]), dtype=float)
+    bayes_smooth[-1, :] = lm_fwd_tracker[-1, :]
+    ratio = np.zeros(trans_matrix.shape)
+
+    # Iterate backwards through the forward tracker from N-1 -> 1
+    for i in range(lm_fwd_tracker.shape[0] - 1, 0, -1):
+        # Ratio of previous bayesian estimates to forward predictions, shaped
+        # to match trans_matrix shape
+        ratio[:, :] = (bayes_smooth[i, :] / lm_pred[i, :]).reshape(-1, 1)
+        # summation term
+        summand = np.sum(trans_matrix * ratio, axis=0)
+        # Smoothed bayesian estimate
+        bayes_smooth[i - 1, :] = lm_fwd_tracker[i - 1, :] * summand
+
+    return bayes_smooth
 
 
 def limited_mem_forward_algo(
-    obs_ts: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
-    memory_duration: int
+    observations: np.ndarray, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+    memory_duration: int, init_prior: Optional[Prior] = Prior.Naive
 ) -> Tuple[np.ndarray, np.ndarray]:
-    pass
+    sys_shape = trans_matrix.shape[0]
+
+    fwd_track = np.zeros((len(observations), sys_shape))
+    pred_track = np.zeros((len(observations), sys_shape))
+
+    # Get the inital memory_duration steps
+    fwd_track[:memory_duration, :], pred_track[:memory_duration, :] = (
+        forward_algo(
+            observations[:memory_duration], trans_matrix, obs_matrix, init_prior
+        )
+    )
+
+    mem_register = observations[:memory_duration]
+    # For the rest of the sequence, use the limited_memory window to form the
+    # forward tracking
+    for i, obs in enumerate(observations[memory_duration:]):
+        # Update memory Register
+        mem_register = np.roll(mem_register, -1)
+        mem_register[-1] = obs
+
+        # get state estimate seqeunce using limited memory
+        _fwd_est_seq, _pred_seq = forward_algo(
+            mem_register, trans_matrix, obs_matrix, init_prior
+        )
+
+        # Update the forward and prediction trackers with final values
+        fwd_track[i + memory_duration, :] = _fwd_est_seq[-1, :]
+        pred_track[i + memory_duration, :] = _pred_seq[-1, :]
+
+    return fwd_track, pred_track
 
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def forward_algo(
-    observations: Iterable, trans_matrix: np.ndarray, obs_matrix: np.ndarray
+    observations: Iterable, trans_matrix: np.ndarray, obs_matrix: np.ndarray,
+    init_prior: Prior = Prior.Naive
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Runs the forward bayesian filter calculations on an input set of
     bservations (`observations`) based on input transition (`trans_matrix`)
@@ -82,7 +155,7 @@ def forward_algo(
     # contiguous in memory
     fwd_track = np.zeros((len(observations), trans_matrix.shape[0]))
     pred_track = np.zeros((len(observations), trans_matrix.shape[0]))
-    fwd_est = np.ones(trans_matrix.shape[0]) / trans_matrix.shape[0]
+    fwd_est = init_prior.get(trans_matrix.shape[0], observations[0])
 
     for i, obs in enumerate(observations):
         fwd_est, pred = _forward_filter(obs, trans_matrix, obs_matrix, fwd_est)
@@ -252,16 +325,24 @@ if __name__ == "__main__":
     from hidden_py.dynamics import HMM
     import time
 
+    p = Prior.Naive
+    P2 = Prior.Random
+
     hmm = HMM(2, 2)
     hmm.init_uniform_cycle()
 
-    hmm.run_dynamics(5)
+    hmm.run_dynamics(100)
     obs_ts, state_ts = hmm.obs_ts, hmm.state_ts
 
     A_perturb = np.array([
         [-0.05, 0.04],
         [0.05, -0.04]
     ])
+
+    fwd_track, pred_track = forward_algo(obs_ts, hmm.A, hmm.B)
+    fwd_track_lm_2, pred_track_lm_2 = limited_mem_forward_algo(obs_ts, hmm.A, hmm.B, 2)
+    fwd_track_lm_4, pred_track_lm_4 = limited_mem_forward_algo(obs_ts, hmm.A, hmm.B, 4)
+    fwd_track_lm_6, pred_track_lm_6 = limited_mem_forward_algo(obs_ts, hmm.A, hmm.B, 6)
 
     A_sample = hmm.A + A_perturb
     B_sample = hmm.B + A_perturb
