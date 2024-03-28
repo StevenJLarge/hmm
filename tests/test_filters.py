@@ -99,14 +99,14 @@ sample_B_3 = np.array([
 sample_obs_seq_2 = np.array([1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1])
 sample_obs_seq_3 = np.array([1, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2])
 
-bayes_2_ini = np.array([0.05934857, 0.94065143])
+bayes_2_ini = np.array([0.02632797, 0.97367203])
 bayes_2_fin = np.array([0.16365312, 0.83634688])
 alpha_2_ini = np.array([0.1, 0.9])
 alpha_2_fin = np.array([1.16607475e-05, 5.95920813e-05])
 beta_2_ini = np.array([4.22875327e-05, 7.44711950e-05])
 beta_2_fin = np.array([1.0, 1.0])
 
-bayes_3_ini = np.array([0.22251862, 0.69124149, 0.08623989])
+bayes_3_ini = np.array([0.09339778, 0.87040474, 0.03619748])
 bayes_3_fin = np.array([0.04392142, 0.04392197, 0.91215661])
 alpha_3_ini = np.array([0.1, 0.8, 0.1])
 alpha_3_fin = np.array([2.12415158e-07, 2.12417828e-07, 4.41142152e-06])
