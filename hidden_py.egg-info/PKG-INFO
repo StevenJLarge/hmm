@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: hidden-py
-Version: 1.0.18
+Version: 1.1.3
 Summary: A python package for discrete-output hidden Markov models
 Author: Steven Large
 Author-email: stevelarge7@gmail.com
@@ -41,7 +41,7 @@ To install this package simply run the command:
 
 This package contains logic for inferring, simulating, and fitting Hidden Markov Models with discrete states and observations. This package serves as a complement to several common HMM packages that deal primarily with _mixture models_, where output symbols are continuous, and drawn from a distribution of values that is somehow conditional on the hidden state.
 
-Here, we have considered primarily scenarios where the observation value is an integer, and one of the possible hidden states, although this is not required, there could be more hidden states than possible observations, or vice-versa, all that really matters is that the observation values (and hidden state values) are discrete. There are three major use-cases for this codebase: dynamics/simulation, system identification/parameter fitting, and signal processing. In all cases, these functionalities are outlined in several tutorial notebooks in the `notebooks/tutorials` location of the [github repository](https://github.com/StevenJLarge/hmm)
+Here, we have considered scenarios where the observation value is an integer, and one of the possible hidden states, although this is not required, there could be more hidden states than possible observations, or vice-versa, all that really matters is that the observation values (and hidden state values) are discrete. There are three major use-cases for this codebase: dynamics/simulation, system identification/parameter fitting, and signal processing. In all cases, these functionalities are outlined in several tutorial notebooks in the `notebooks/tutorials` location of the [github repository](https://github.com/StevenJLarge/hmm)
 
 <br />
 
@@ -56,11 +56,11 @@ Without any ambiguity in the observed value (_i.e._ the underlying Markov model 
 </p>
 
 
-Here, the state $x_t$ at time $t$ only depends on the state at the previous time $t-1$. As a result the ecolution of a probability distribution over states can be modelled by simply multiplying an initial distribution by the transition matrix, and repeating the process for each time step. For example, given an initial distribution over states at time 0 and a transition matrix $A$, the probability distribution at time $T$ is
+Here, the state $x_t$ at time $t$ only depends on the state at the previous time $t-1$. As a result the evolution of a probability distribution over states can be modelled by simply multiplying an initial distribution by the transition matrix, and repeating the process for each time step. For example, given an initial distribution over states at time 0 and a transition matrix $A$, the probability distribution at time $T$ is
 
 $$ p_T = A^T \cdot p_0 $$
 
-A hidden Markov model (HMM), on the other hand, is a probabilistic function of a Markov model. This means that the output of an HMM (the observation $y$) is correlated with the underlying (hidden/unobserved) state of the Markov model, but only probabilistically so. For a set of discrete possible observations (as we capture in this package), the observation process can also be modelled by a matrix (the _observation matrix_) $B$ with elements $B_{ij} = p(y_t = i | x_{t} = j)$ quantifying the probability that our measurement/observation $y_t$ at time $t$ is equal to $i$ given the hidden system is in state $j$. Here, the diagonal elements represent our probability of observing the _correct_ state, while off-diagonals represent the probability of error. In comparison to the figure used in the Markov system, the below diagram shows how causality works in a hidden Markov model.
+A hidden Markov model (HMM), on the other hand, is a probabilistic function of a Markov model. This means that the output of an HMM (the observation $y$) is correlated with the underlying (hidden/unobserved) state of the Markov model, but not necessarily equal to it. For a set of discrete possible observations (as we capture in this package), the observation process can also be modelled by a matrix (the _observation matrix_) $B$ with elements $B_{ij} = p(y_t = i | x_{t} = j)$ quantifying the probability that our measurement/observation $y_t$ at time $t$ is equal to $i$ given the hidden system is in state $j$. Here, the diagonal elements represent our probability of observing the _correct_ state, while off-diagonals represent the probability of error. In comparison to the figure used in the Markov system, the below diagram shows how causality works in a hidden Markov model.
 
 <p align="center">
     <img src="https://github.com/StevenJLarge/hmm/blob/master/public/resources/hidden_markov_schematic.png?raw=true" width="75%" vspace="30px" />
@@ -70,7 +70,7 @@ Here, the observations ($y_t$) are stochastic (random) functions of the underlyi
 
 ---
 
-As for the components of the package, the goal of the simulation functionality is simply to generate trajectories of both the hidden state and observation time-series that are conistent with these probabilities. The goal for system identification/parameter fitting is to fit the most likely parameters (elements of the $A$ and $B$) matrices, given only a time series of observations. Finally, the goal if signal processing is to make use of the observation sequence to infer what the hidden state is at a particular point in time.
+As for the components of the package, the goal of the simulation functionality is simply to generate trajectories of both the hidden state and observation time-series that are conistent with these probabilities. Conversely, the goal for system identification/parameter fitting is to find the most likely parameters (elements of the $A$ and $B$) matrices, given only a time series of observations. Finally, the goal if signal processing is to make use of the observation sequence (and a particular set of $A$ and $B$ matrices) to infer what the hidden state is at a particular point in time in a singl etime series.
 
 ### Dynamics/Simulation
 
@@ -91,8 +91,8 @@ hmm.init_uniform_cycle()
 hmm.run_dynamics(100)
 
 # Pull out the observations, and true (simulated) hidden state values
-observations = hmm.get_obs_ts()
-hidden_states = hmm.get_state_ts()
+observations = hmm.obs_ts
+hidden_states = hmm.state_ts
 ```
 
 As an example, the schematic below shows a possible trajectory for a HMM with 2 hidden states and 2 possible observation values.
@@ -149,7 +149,7 @@ res_bw = analyzer.optimize(observations, A_est, B_est, opt_type=hp.OptClass.ExpM
 
 ```
 
-In all cases, there is also an option to add algorithm options to customize the specifics of the optinization. Most relevant is for the expectation-maximization where you can specify a maximum number of iterations for the algorithm, as well as a threshold on the size of parameter changes (quantified by the matrix norm of pre- and post-update $A$ and $B$ matrices). This can be accessed through the `algo_opts` dictionary. For instance, if we wanted to change the maximum iterations in the BW algorithm to 1000 and set the termination threshold at `1e-10`, we would perform the previous call as
+In all cases, there is also the ability to add algorithm options to customize the specifics of the optimization. Most relevant is for the expectation-maximization where you can specify a maximum number of iterations for the algorithm, as well as a threshold on the size of parameter changes (quantified by the matrix norm of pre- and post-update $A$ and $B$ matrices). This can be accessed through the `algo_opts` dictionary. For instance, if we wanted to change the maximum iterations in the BW algorithm to 1000 and set the termination threshold at `1e-10`, we would perform the previous call as
 
 ```python
 options = {
@@ -168,13 +168,13 @@ In essence, this set of tools allows you to infer the best model given a set of 
 
 ### Signal Processing
 
-The `infer` submodule can also be used for the purposes of signal processing: given a valid estimate of the model parameters, how can we best estimate the hidden state value, given the observations. There are two distinct domains of application, first would be prediction in real time, where only observations in the past are available for inferring the current hidden state (this would use the so-called forward-filtered estiamte). There is also an _ex post_ approach, which uses the entirety of observations from a given period of time to estimate the hidden state at a particular point within that time period. This is the so-called Bayesian smoothed estiamte of the hidden state.
+The `infer` submodule can also be used for the purposes of signal processing: given a valid estimate of the model parameters, how can we best estimate the hidden state value, given the observations. There are two distinct domains of application, first would be prediction in real time, where only observations in the past are available for inferring the current hidden state (this would use the so-called forward-filtered estimate). There is also an _ex post_ approach, which uses the entirety of observations from a given period of time to estimate the hidden state at a particular point within that time period. This is the so-called Bayesian smoothed estimate of the hidden state.
 
 Mathematically, if we denote $Y^t \equiv \{ y_0, y_1, \cdots, y_t \}$ as the sequence of observations from tie $t=0$ up to time $t$, then for a total trajectory length of $T$, the forward filter and Bayesian smoothed estimate are calculating
 
-$$ p(x_t | Y^t) \quad \to \qquad \text{\sf Forward-filter} $$
+$$ p(x_t | Y^t) \quad \to \qquad \text{Forward-filter} $$
 
-$$ p(x_t | Y^T) \quad \to \quad \text{\sf Bayesian smoother} $$
+$$ p(x_t | Y^T) \quad \to \quad \text{Bayesian smoother} $$
 
 where, $x_t$ is the hidden state at time $t$.
 

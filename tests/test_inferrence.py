@@ -35,7 +35,7 @@ sample_err = [1, 0, 0.5]
 sample_disc = [2, 0, 1]
 
 sym_test = [True, False]
-opt_type_test = OptClass._member_names_
+opt_type_test = OptClass._member_names_ + list(OptClass._member_map_.values())
 
 sample_obs = (
     np.array([0, 1, 2]), [0, 1, 2], pd.DataFrame([0, 1, 2]),
@@ -174,7 +174,7 @@ def test_discord_calculation(sample_data):
 @pytest.mark.parametrize('obs_input', sample_obs)
 def test_input_observations_validation(obs_input):
     # Arrange / Act
-    obs = infer.MarkovInfer._validate_input(obs_input)
+    obs = infer.MarkovInfer._validate_input_observations(obs_input)
 
     # Assert
     assert isinstance(obs, np.ndarray)
@@ -184,7 +184,7 @@ def test_input_observations_validation(obs_input):
 def test_invalid_input_observation_raises_in_validation(obs_input):
     # Arrange / Act / Assert
     with pytest.raises((ValueError, NotImplementedError)):
-        _ = infer.MarkovInfer._validate_input(obs_input)
+        _ = infer.MarkovInfer._validate_input_observations(obs_input)
 
 
 @pytest.mark.parametrize(
@@ -206,35 +206,49 @@ def test_error_rate_calculation(sample_data):
 
 
 # Optimizations
-def check_optimizer_raises_for_invalid_class(test_hmm):
+def test_check_optimizer_raises_for_invalid_class(test_hmm):
     # Arrange
     BayesInfer = infer.MarkovInfer(2, 2)
     sample_obs = np.zeros(10)
+    BayesInfer.set_initial_matrices(test_hmm.A, test_hmm.B)
 
     # Act / Assert
     with pytest.raises(ValueError):
-        BayesInfer.optimize(
-            sample_obs, test_hmm.A, test_hmm.B, obs_type="INVALID"
-        )
+        BayesInfer.optimize(sample_obs, opt_type="INVALID",)
 
 
 @pytest.mark.parametrize(
-    ['sym', 'opt_type'], [itertools.product(sym_test, opt_type_test)]
+    'sym, opt_type', list(itertools.product(sym_test, opt_type_test))
 )
-def check_optimizer_runs_with_correct_return_type_for_valid_input(test_hmm, sym, opt_type):
+def test_check_optimizer_runs_with_correct_return_type_for_valid_input(
+    test_hmm, sym, opt_type
+):
     # Arrange
+    n_steps = 100
+    BayesInfer = infer.MarkovInfer(2, 2)
+    BayesInfer.set_initial_matrices(test_hmm.A, test_hmm.B)
+ 
+    # Act
+    test_hmm.run_dynamics(n_steps)
+    obs_ts = test_hmm.obs_ts
+    opt_res = BayesInfer.optimize(obs_ts, symmetric=sym, opt_type=opt_type)
+
+    # Assert
+    assert isinstance(opt_res, OptimizationResult)
+
+
+def test_optimizer_raises_when_matrices_are_not_initialized(test_hmm):
+    # Arange
     n_steps = 100
     BayesInfer = infer.MarkovInfer(2, 2)
 
     # Act
     test_hmm.run_dynamics(n_steps)
     obs_ts = test_hmm.obs_ts
-    opt_res = BayesInfer.optimize(
-        obs_ts, test_hmm.A, test_hmm.B, symmetric=sym, opt_type=opt_type
-    )
 
     # Assert
-    assert isinstance(opt_res, OptimizationResult)
+    with pytest.raises(ValueError):
+        _ = BayesInfer.optimize(obs_ts)
 
 
 if __name__ == "__main__":
