@@ -27,7 +27,7 @@ class MarkovInfer:
         self.backward_tracker = None
         self.predictions = None
         self.predictions_back = None
-        self.bayes_smooth = None
+        self.bayes_tracker = None
         self.alpha_tracker = None
         self.beta_tracker = None
 
@@ -141,7 +141,7 @@ class MarkovInfer:
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to implement the forward filter algorithm, and write
         results to internal forward_tracker and prediction_tracker variables
 
@@ -149,18 +149,20 @@ class MarkovInfer:
             observations (Iterable[int]): observation timeseries
             trans_matrix (np.ndarray): transition matrix
             obs_matrix (np.ndarray): observation matrix
+
         """
         observations = self._validate_input_observations(observations)
         self.forward_tracker, self.prediction_tracker = bayesian.forward_algo(
             observations, trans_matrix, obs_matrix
         )
+        return self.forward_tracker
 
     def backward_algo(
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to implement the backward filter algorithm, and write
         results to internal backward_tracker and prediction_back variables
 
@@ -173,11 +175,12 @@ class MarkovInfer:
         self.backward_tracker, self.predictions_back = bayesian.backward_algo(
             observations, trans_matrix, obs_matrix
         )
+        return self.backward_tracker
 
     def alpha(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray, norm: Optional[bool] = False
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to interface with alpha-calcualtion routine. Sets to
         internal alpha_tracker instance variable
 
@@ -193,11 +196,12 @@ class MarkovInfer:
         self.alpha_tracker = bayesian.alpha_prob(
             observations, trans_matrix, obs_matrix, norm=norm
         )
+        return self.alpha_tracker
 
     def beta(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray, norm: Optional[bool] = False
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to interface with beta-calcualtion routine. Sets to
         internal beta_tracker instance variable
 
@@ -213,11 +217,12 @@ class MarkovInfer:
         self.beta_tracker = bayesian.beta_prob(
             observations, trans_matrix, obs_matrix, norm=norm
         )
+        return self.beta_tracker
 
-    def bayesian_smooth(
+    def bayesian_smoothing_algo(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to interface with bayesian smoothing routine. Sets
         to internal bayes_smooth instance variable
 
@@ -230,7 +235,7 @@ class MarkovInfer:
         self.bayes_smooth = bayesian.bayes_estimate(
             observations, trans_matrix, obs_matrix
         )
-        return self.bayes_smooth
+        return self.bayes_tracker
 
     def discord(self, est_1: Iterable, est_2: Iterable) -> float:
         """Calculates the discord order parameter for an HMM based on the
@@ -290,26 +295,42 @@ class MarkovInfer:
         opt_type = self._validate_optimizer_input_args(opt_type)
         observations = self._validate_input_observations(observations)
 
+        # For the global optimizer, dim_tuple, but no initial guesses
+        dim_tuple = (self.trans_init.shape, self.obs_init.shape)
+
+        optimization_params = {
+            'dim_tuple': dim_tuple,
+            'symmetric': symmetric,
+            'trans_matrix': self.trans_init,
+            'obs_matrix': self.obs_init
+        }
+
+        if self.logging:
+            logger.info('Building optimizer...')
+        optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
+
         if self.logging:
             logger.info('Entering optimization...')
+        return optimizer.optimize(observations, **optimization_params)
 
-        # For the global optimizer, dim_tuple, but no initial guesses
-        optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
-        if (opt_type is OptClass.Global):
-            if self.logging:
-                logger.info('Running global optimization')
-            dim_tuple = (self.trans_init.shape, self.obs_init.shape)
-            return optimizer.optimize(observations, dim_tuple, symmetric)
+        # The line above should replace all of this, just need to make sure
+        # that all of the underlying optimizers support the same argumetns
+        # being passed in
+        # if (opt_type is OptClass.Global):
+        #     if self.logging:
+        #         logger.info('Running global optimization')
+        #     dim_tuple = (self.trans_init.shape, self.obs_init.shape)
+        #     return optimizer.optimize(observations, dim_tuple, symmetric)
 
-        # For EM opt, there is no option to input a symmetric constraint
-        elif (opt_type is OptClass.ExpMax):
-            if self.logging:
-                logger.info("Running Baum-Welch (EM) optimization...")
-            return optimizer.optimize(observations, self.trans_init, self.obs_init)
+        # # For EM opt, there is no option to input a symmetric constraint
+        # elif (opt_type is OptClass.ExpMax):
+        #     if self.logging:
+        #         logger.info("Running Baum-Welch (EM) optimization...")
+        #     return optimizer.optimize(observations, self.trans_init, self.obs_init)
 
-        if self.logging:
-            logger.info("Running local partial-data likelihood optimization...")
-        return optimizer.optimize(observations, self.trans_init, self.obs_init, symmetric)
+        # if self.logging:
+        #     logger.info("Running local partial-data likelihood optimization...")
+        # return optimizer.optimize(observations, self.trans_init, self.obs_init, symmetric)
 
 
 if __name__ == "__main__":

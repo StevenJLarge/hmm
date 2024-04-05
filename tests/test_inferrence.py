@@ -73,7 +73,7 @@ def test_default_constructor_behaviour():
 
     assert BayesInfer.forward_tracker is None
     assert BayesInfer.backward_tracker is None
-    assert BayesInfer.bayes_smooth is None
+    assert BayesInfer.bayes_tracker is None
     assert BayesInfer.predictions is None
     assert BayesInfer.predictions_back is None
     assert BayesInfer.alpha_tracker is None
@@ -118,7 +118,7 @@ def test_smoothing_algorithm_tracking(test_hmm):
     # Act
     test_hmm.run_dynamics(n_steps)
     obs_ts = test_hmm.obs_ts
-    BayesInfer.bayesian_smooth(obs_ts, test_hmm.A, test_hmm.B)
+    BayesInfer.bayesian_smoothing_algo(obs_ts, test_hmm.A, test_hmm.B)
 
     # Assert
     assert len(BayesInfer.bayes_smooth) == len(obs_ts)
