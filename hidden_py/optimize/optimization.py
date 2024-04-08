@@ -30,8 +30,8 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
         return f"LocalLikelihoodOptimizer(algorithm={self.algo})"
 
     def optimize(
-        self, obs_ts: Iterable, A_guess: np.ndarray, B_guess: np.ndarray,
-        symmetric: Optional[bool] = False
+        self, obs_ts: Iterable, trans_matrix: np.ndarray,
+        obs_matrix: np.ndarray, symmetric: Optional[bool] = False, **kwargs
     ) -> LikelihoodOptimizationResult:
         """Routine to run actual optimization of the model. Passes off the
         objective function and encoded parameter array to a scipy optimizer
@@ -52,9 +52,13 @@ class LocalLikelihoodOptimizer(LikelihoodOptimizer):
 
         # Encode model parameters into parameter vector
         if symmetric:
-            param_init, dim_tuple = self._encode_parameters_symmetric(A_guess, B_guess)
+            param_init, dim_tuple = self._encode_parameters_symmetric(
+                trans_matrix, obs_matrix
+            )
         else:
-            param_init, dim_tuple = self._encode_parameters(A_guess, B_guess)
+            param_init, dim_tuple = self._encode_parameters(
+                trans_matrix, obs_matrix
+            )
 
         # Additional arguments to pass into optimizer
         opt_args = (dim_tuple, obs_ts, symmetric)
@@ -128,7 +132,7 @@ class GlobalLikelihoodOptimizer(LikelihoodOptimizer):
 
     def optimize(
         self, obs_ts: Iterable, dim_tuple: Tuple,
-        symmetric: Optional[bool] = False
+        symmetric: Optional[bool] = False, **kwargs
     ) -> LikelihoodOptimizationResult:
         """Routine to run actual optimization of the model. Passes off the
         objective function and encoded parameter array to a scipy optimizer.
@@ -424,7 +428,7 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
 
     def optimize(
         self, obs_ts: np.ndarray, trans_matrix: np.ndarray,
-        obs_matrix: np.ndarray
+        obs_matrix: np.ndarray, **kwargs
     ) -> EMOptimizationResult:
         """Main entrypoint for executing on Baum-Welch optimization procedure
         this routine will iterate updates to the input transition and
@@ -478,8 +482,8 @@ class EMOptimizer(CompleteLikelihoodOptimizer):
             'conv_threshold': self._opt_threshold
         }
         if self._track:
-            meta_dict["trans_tracker"]: trans_mat_tracker
-            meta_dict["obs_tracker"]: obs_mat_tracker
+            meta_dict["trans_tracker"] = trans_mat_tracker
+            meta_dict["obs_tracker"] = obs_mat_tracker
 
         return EMOptimizationResult(
             trans_matrix, obs_matrix, update_tracker, iter_count,

@@ -1,6 +1,6 @@
 # File to contain the class definitions and routines for inferring the
 # properties of the HMM
-from typing import Iterable, Optional, Dict
+from typing import Iterable, Optional, Dict, Union
 import sys
 from loguru import logger
 import numpy as np
@@ -27,7 +27,7 @@ class MarkovInfer:
         self.backward_tracker = None
         self.predictions = None
         self.predictions_back = None
-        self.bayes_smooth = None
+        self.bayes_tracker = None
         self.alpha_tracker = None
         self.beta_tracker = None
 
@@ -35,14 +35,29 @@ class MarkovInfer:
         self.n_sys = dim_sys
         self.n_obs = dim_obs
 
+        # Initial guesses for transition and observation matrices
+        self.trans_init = None
+        self.obs_init = None
+
         # Flag for if logging output is desired
         self.logging = logging
         if logging:
             logger.remove()
             logger.add(sys.stdout, colorize=True, format=log_fmt)
 
+    def __repr__(self) -> str:
+        return f"MarkovInfer(dim_sys={self.n_sys}, dim_obs={self.n_obs})"
+
+    def set_initial_matrices(self, trans_init: np.ndarray, obs_init: np.ndarray) -> None:
+        if trans_init.shape != (self.n_sys, self.n_sys):
+            raise ValueError("Transition matrix must be square...")
+        if obs_init.shape != (self.n_sys, self.n_obs):
+            raise ValueError("Observation matrix must have correct dimensions...")
+        self.trans_init = trans_init
+        self.obs_init = obs_init
+
     @staticmethod
-    def _validate_input(obs_ts: Iterable) -> np.ndarray:
+    def _validate_input_observations(obs_ts: Iterable) -> np.ndarray:
         """Routine to validate input for observation timeseries. This will cast
         lists, and pandas Series/DataFrme to a 1-d numpy array, for use in the
         lower-level (numba-optimized) filter routines
@@ -78,12 +93,55 @@ class MarkovInfer:
                 "observation timeseries must be list or pandas Series/DataFrame"
             )
 
+    def _validate_optimizer_input_args(
+        self, opt_type: Union[OptClass, str]
+    ) -> OptClass:
+        """Routine to validate the inpuit argumetns passed into the optimizer
+
+        Args:
+            opt_type (Union[OptClass, str]): type of optimization, should be
+                one of the valid OptClass enum mebers or, the string value
+                corresponding to the name (case-insensitive)
+
+        Raises:
+            ValueError: If transition and observation matrices have not been
+                set prior to calling the optimizer, this error will get raised
+            ValueError: If the opt_type provided is not an explicit OptClass
+                enum member, and if the string value cannot be coerced to one
+                of the valid member names
+            Exception: Catchall for other errors, for instance if opt_type is
+                not an OptClass or a string
+
+        Returns:
+            OptClass: if everything is validated, this returns the opt_type as
+                the OptClass enum member
+        """
+        if self.trans_init is None or self.trans_init is None:
+            raise ValueError(
+                "Initial guesses for transition and observation matrices "
+                "must be set (using `set_init`) before optimization..."
+            )
+
+        if not isinstance(opt_type, OptClass):
+            try:
+                # TODO This is messy... swap 'ExpMax' --> 'Baumwelch'?
+                opt_type = opt_type.title().replace('Expmax', 'ExpMax')
+                opt_type = OptClass._member_map_[opt_type]
+            except KeyError:
+                raise ValueError(
+                    'Invalid `opt_class`, must be a member of OptClass enum...'
+                )
+            except Exception as ex:
+                raise Exception(f'Unknown error: {ex}')
+
+        return opt_type
+
     def forward_algo(
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to implement the forward filter algorithm, and write
         results to internal forward_tracker and prediction_tracker variables
 
@@ -91,18 +149,20 @@ class MarkovInfer:
             observations (Iterable[int]): observation timeseries
             trans_matrix (np.ndarray): transition matrix
             obs_matrix (np.ndarray): observation matrix
+
         """
-        observations = self._validate_input(observations)
+        observations = self._validate_input_observations(observations)
         self.forward_tracker, self.prediction_tracker = bayesian.forward_algo(
             observations, trans_matrix, obs_matrix
         )
+        return self.forward_tracker
 
     def backward_algo(
         self,
         observations: Iterable[int],
         trans_matrix: np.ndarray,
         obs_matrix: np.ndarray,
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to implement the backward filter algorithm, and write
         results to internal backward_tracker and prediction_back variables
 
@@ -111,15 +171,16 @@ class MarkovInfer:
             trans_matrix (np.ndarray): transition matrix
             obs_matrix (np.ndarray): observation matrix
         """
-        observations = self._validate_input(observations)
+        observations = self._validate_input_observations(observations)
         self.backward_tracker, self.predictions_back = bayesian.backward_algo(
             observations, trans_matrix, obs_matrix
         )
+        return self.backward_tracker
 
     def alpha(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray, norm: Optional[bool] = False
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to interface with alpha-calcualtion routine. Sets to
         internal alpha_tracker instance variable
 
@@ -131,15 +192,16 @@ class MarkovInfer:
                 use normalized (across states) at each point in time.
                 Defaults to False.
         """
-        observations = self._validate_input(observations)
+        observations = self._validate_input_observations(observations)
         self.alpha_tracker = bayesian.alpha_prob(
             observations, trans_matrix, obs_matrix, norm=norm
         )
+        return self.alpha_tracker
 
     def beta(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray, norm: Optional[bool] = False
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to interface with beta-calcualtion routine. Sets to
         internal beta_tracker instance variable
 
@@ -151,15 +213,16 @@ class MarkovInfer:
                 use normalized (across states) at each point in time.
                 Defaults to False.
         """
-        observations = self._validate_input(observations)
+        observations = self._validate_input_observations(observations)
         self.beta_tracker = bayesian.beta_prob(
             observations, trans_matrix, obs_matrix, norm=norm
         )
+        return self.beta_tracker
 
-    def bayesian_smooth(
+    def bayesian_smoothing_algo(
         self, observations: np.ndarray, trans_matrix: np.ndarray,
         obs_matrix: np.ndarray
-    ) -> None:
+    ) -> np.ndarray:
         """Wrapper routine to interface with bayesian smoothing routine. Sets
         to internal bayes_smooth instance variable
 
@@ -168,11 +231,11 @@ class MarkovInfer:
             trans_matrix (np.ndarray): transition matrix
             obs_matrix (np.ndarray): observation matrix
         """
-        observations = self._validate_input(observations)
+        observations = self._validate_input_observations(observations)
         self.bayes_smooth = bayesian.bayes_estimate(
             observations, trans_matrix, obs_matrix
         )
-        return self.bayes_smooth
+        return self.bayes_tracker
 
     def discord(self, est_1: Iterable, est_2: Iterable) -> float:
         """Calculates the discord order parameter for an HMM based on the
@@ -204,9 +267,8 @@ class MarkovInfer:
         return 1 - np.mean([p == s for p, s in zip(pred_ts, state_ts)])
 
     def optimize(
-        self, observations: Iterable, trans_init: np.ndarray,
-        obs_init: np.ndarray, symmetric: bool = False,
-        opt_type: OptClass = OptClass.Local, algo_opts: Dict = {},
+        self, observations: Iterable, symmetric: bool = False,
+        opt_type: Union[OptClass, str] = OptClass.Local, algo_opts: Dict = {},
     ) -> OptimizationResult:
         """Main entrypoint for optimizing an internal model
 
@@ -230,31 +292,45 @@ class MarkovInfer:
         Returns:
             OptimizationResult: Result of optimization
         """
+        opt_type = self._validate_optimizer_input_args(opt_type)
+        observations = self._validate_input_observations(observations)
+
+        # For the global optimizer, dim_tuple, but no initial guesses
+        dim_tuple = (self.trans_init.shape, self.obs_init.shape)
+
+        optimization_params = {
+            'dim_tuple': dim_tuple,
+            'symmetric': symmetric,
+            'trans_matrix': self.trans_init,
+            'obs_matrix': self.obs_init
+        }
+
+        if self.logging:
+            logger.info('Building optimizer...')
+        optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
+
         if self.logging:
             logger.info('Entering optimization...')
+        return optimizer.optimize(observations, **optimization_params)
 
-        if not isinstance(opt_type, OptClass):
-            raise ValueError(
-                'Invalid `opt_class`, must be a member of OptClass enum...'
-            )
-        observations = self._validate_input(observations)
-        # For the global optimizer, dim_tuple, but no initial guesses
-        optimizer = OPTIMIZER_REGISTRY[opt_type](**algo_opts)
-        if (opt_type is OptClass.Global):
-            if self.logging:
-                logger.info('Running global optimization')
-            dim_tuple = (trans_init.shape, obs_init.shape)
-            return optimizer.optimize(observations, dim_tuple, symmetric)
+        # The line above should replace all of this, just need to make sure
+        # that all of the underlying optimizers support the same argumetns
+        # being passed in
+        # if (opt_type is OptClass.Global):
+        #     if self.logging:
+        #         logger.info('Running global optimization')
+        #     dim_tuple = (self.trans_init.shape, self.obs_init.shape)
+        #     return optimizer.optimize(observations, dim_tuple, symmetric)
 
-        # For EM opt, there is no option to input a symmetric constraint
-        elif (opt_type is OptClass.ExpMax):
-            if self.logging:
-                logger.info("Running Baum-Welch (EM) optimization...")
-            return optimizer.optimize(observations, trans_init, obs_init)
+        # # For EM opt, there is no option to input a symmetric constraint
+        # elif (opt_type is OptClass.ExpMax):
+        #     if self.logging:
+        #         logger.info("Running Baum-Welch (EM) optimization...")
+        #     return optimizer.optimize(observations, self.trans_init, self.obs_init)
 
-        if self.logging:
-            logger.info("Running local partial-data likelihood optimization...")
-        return optimizer.optimize(observations, trans_init, obs_init, symmetric)
+        # if self.logging:
+        #     logger.info("Running local partial-data likelihood optimization...")
+        # return optimizer.optimize(observations, self.trans_init, self.obs_init, symmetric)
 
 
 if __name__ == "__main__":
