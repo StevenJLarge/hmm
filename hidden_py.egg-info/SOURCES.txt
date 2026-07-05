@@ -1,5 +1,6 @@
 LICENSE.txt
 README.md
+pyproject.toml
 setup.py
 hidden_py/__init__.py
 hidden_py/dynamics.py
