@@ -1,9 +1,7 @@
 Metadata-Version: 2.4
 Name: hidden-py
-Version: 0.1.0
-Summary: Hidden Markov Simulation and Inferrence Package for Python
-Author: Steven Large
-Author-email: stevelarge7@gmail.com
+Version: 1.3.0
+Summary: A python package for discrete-output hidden Markov models
 Requires-Python: ==3.10.17
 Description-Content-Type: text/markdown
 License-File: LICENSE.txt
@@ -13,8 +11,6 @@ Requires-Dist: numba>=0.65.1
 Requires-Dist: numpy>=2.2.6
 Requires-Dist: scipy>=1.15.3
 Requires-Dist: seaborn>=0.13.2
-Dynamic: author
-Dynamic: author-email
 Dynamic: license-file
 
 # **A Hidden Markov Model package for python**
