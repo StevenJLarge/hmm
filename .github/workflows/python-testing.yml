@@ -27,7 +27,10 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      
+     
+      - name: Install python 3.10
+        run: uv python install 3.10.17
+
       - name: Install project dependencies
         run: uv sync --dev
 
